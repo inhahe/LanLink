@@ -1,0 +1,62 @@
+<Window x:Class="LanLink.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LanLink Settings" Width="460" SizeToContent="Height"
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        Background="#F3F4F6">
+
+    <Border Background="White" CornerRadius="8" Margin="16" Padding="20"
+            BorderBrush="#E5E7EB" BorderThickness="1">
+        <StackPanel>
+
+            <TextBlock Text="Settings" FontSize="18" FontWeight="SemiBold"
+                       Margin="0,0,0,16"/>
+
+            <!-- Display name -->
+            <TextBlock Text="Display name" FontSize="12" Foreground="#6B7280"
+                       Margin="0,0,0,3"/>
+            <TextBox x:Name="NameBox" Padding="6,4" FontSize="13" Margin="0,0,0,14"/>
+
+            <!-- Download folder -->
+            <TextBlock Text="Download folder" FontSize="12" Foreground="#6B7280"
+                       Margin="0,0,0,3"/>
+            <Grid Margin="0,0,0,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="FolderBox" Grid.Column="0" Padding="6,4"
+                         FontSize="13" IsReadOnly="True"/>
+                <Button Grid.Column="1" Content="Browse&#x2026;" Padding="10,4"
+                        Margin="8,0,0,0" Click="Browse_Click"/>
+            </Grid>
+
+            <!-- Port -->
+            <TextBlock Text="Port  (requires app restart)" FontSize="12"
+                       Foreground="#6B7280" Margin="0,0,0,3"/>
+            <TextBox x:Name="PortBox" Padding="6,4" FontSize="13"
+                     Margin="0,0,0,14" Width="100" HorizontalAlignment="Left"/>
+
+            <!-- Run on startup -->
+            <CheckBox x:Name="StartupCheck" Content="Run on startup"
+                      FontSize="13" Margin="0,0,0,6"/>
+            <CheckBox x:Name="MinimizedCheck" Content="Start minimized to tray"
+                      FontSize="13" Margin="16,0,0,14" Foreground="#6B7280"/>
+
+            <!-- Node ID (read-only, informational) -->
+            <TextBlock Text="Node ID" FontSize="12" Foreground="#6B7280"
+                       Margin="0,0,0,3"/>
+            <TextBox x:Name="NodeIdBox" Padding="6,4" FontSize="13"
+                     IsReadOnly="True" Margin="0,0,0,20" Foreground="#9CA3AF"/>
+
+            <!-- Buttons -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" Padding="18,6" Margin="0,0,8,0"
+                        Click="Cancel_Click"/>
+                <Button Content="Save" Padding="18,6" Click="Save_Click"
+                        FontWeight="SemiBold"/>
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+</Window>

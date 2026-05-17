@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="LanLink.SettingsPage"
+             Title="Settings"
+             BackgroundColor="#F3F4F6">
+
+    <ScrollView Padding="16">
+        <Frame Padding="20" CornerRadius="12"
+               BackgroundColor="White" BorderColor="#E5E7EB" HasShadow="False">
+            <VerticalStackLayout Spacing="16">
+
+                <Label Text="Settings" FontSize="22" FontAttributes="Bold"/>
+
+                <!-- Display Name -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Display name" FontSize="12" TextColor="#6B7280"/>
+                    <Entry x:Name="NameEntry" FontSize="14"/>
+                </VerticalStackLayout>
+
+                <!-- Download Folder -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Download folder" FontSize="12" TextColor="#6B7280"/>
+                    <Entry x:Name="FolderEntry" FontSize="13" IsReadOnly="True"
+                           TextColor="#6B7280"/>
+                </VerticalStackLayout>
+
+                <!-- Port -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Port (requires restart)" FontSize="12" TextColor="#6B7280"/>
+                    <Entry x:Name="PortEntry" FontSize="14" Keyboard="Numeric"
+                           WidthRequest="120" HorizontalOptions="Start"/>
+                </VerticalStackLayout>
+
+                <!-- Node ID (read-only) -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Node ID" FontSize="12" TextColor="#6B7280"/>
+                    <Label x:Name="NodeIdLabel" FontSize="13" TextColor="#9CA3AF"/>
+                </VerticalStackLayout>
+
+                <!-- Buttons -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Margin="0,12,0,0">
+                    <Button Grid.Column="0" Text="Cancel"
+                            BackgroundColor="#E5E7EB" TextColor="#374151"
+                            CornerRadius="8" Clicked="Cancel_Clicked"/>
+                    <Button Grid.Column="1" Text="Save"
+                            BackgroundColor="#2563EB" TextColor="White"
+                            FontAttributes="Bold" CornerRadius="8"
+                            Clicked="Save_Clicked"/>
+                </Grid>
+
+            </VerticalStackLayout>
+        </Frame>
+    </ScrollView>
+</ContentPage>

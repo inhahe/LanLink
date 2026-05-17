@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:LanLink"
+             x:Class="LanLink.MainPage"
+             Title="LanLink"
+             Shell.NavBarIsVisible="True">
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" Padding="0">
+            <Label Text="LanLink" FontSize="20" FontAttributes="Bold"
+                   VerticalOptions="Center" TextColor="White"/>
+            <ImageButton Grid.Column="1" Source="gear.png"
+                         WidthRequest="28" HeightRequest="28"
+                         VerticalOptions="Center" Margin="0,0,8,0"
+                         Clicked="Settings_Clicked"
+                         BackgroundColor="Transparent"/>
+        </Grid>
+    </Shell.TitleView>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12" RowSpacing="10"
+          BackgroundColor="#F3F4F6">
+
+        <!-- ============ ROW 0: PEER LIST ============ -->
+        <Frame Grid.Row="0" Padding="10" CornerRadius="10"
+               BackgroundColor="White" BorderColor="#E5E7EB"
+               HasShadow="False">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Peers" FontSize="15" FontAttributes="Bold"/>
+
+                <CollectionView x:Name="PeerListView"
+                                SelectionMode="Single"
+                                SelectionChanged="PeerList_SelectionChanged"
+                                HeightRequest="120">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="local:Peer">
+                            <SwipeView>
+                                <SwipeView.RightItems>
+                                    <SwipeItems>
+                                        <SwipeItem Text="Remove"
+                                                   BackgroundColor="#DC2626"
+                                                   Invoked="RemovePeer_Invoked"
+                                                   CommandParameter="{Binding .}"
+                                                   IsVisible="{Binding IsConnected, Converter={StaticResource InvertBoolConverter}}"/>
+                                    </SwipeItems>
+                                </SwipeView.RightItems>
+
+                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="4,6" ColumnSpacing="8"
+                                      BackgroundColor="White">
+                                    <Ellipse Grid.Column="0" WidthRequest="10" HeightRequest="10"
+                                             VerticalOptions="Center"
+                                             Fill="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"/>
+                                    <Label Grid.Column="1" Text="{Binding Name}"
+                                           FontSize="14" VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation"
+                                           TextColor="{Binding IsConnected, Converter={StaticResource ConnectedToTextColorConverter}}"/>
+                                    <Label Grid.Column="2"
+                                           Text="{Binding StatusLabel}"
+                                           FontSize="11" TextColor="#9CA3AF"
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </SwipeView>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                    <CollectionView.EmptyView>
+                        <Label x:Name="PeerEmptyLabel"
+                               Text="Starting..."
+                               TextColor="#9CA3AF" FontSize="13"
+                               HorizontalOptions="Center" Margin="0,10"/>
+                    </CollectionView.EmptyView>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- ============ ROW 1: CONNECT REMOTE ============ -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Entry x:Name="RemoteEntry" Placeholder="Remote host or host:port"
+                   FontSize="13" BackgroundColor="White"
+                   ReturnCommand="{x:Null}" Completed="RemoteEntry_Completed"/>
+            <Button Grid.Column="1" Text="Connect" FontSize="13"
+                    Padding="14,0" Clicked="ConnectRemote_Clicked"
+                    BackgroundColor="#2563EB" TextColor="White"
+                    CornerRadius="6"/>
+        </Grid>
+
+        <!-- ============ ROW 2: ACTIVITY LOG ============ -->
+        <Frame Grid.Row="2" Padding="10" CornerRadius="10"
+               BackgroundColor="White" BorderColor="#E5E7EB"
+               HasShadow="False">
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Activity" FontSize="15" FontAttributes="Bold"/>
+                <CollectionView x:Name="ActivityLogView"
+                                ItemsUpdatingScrollMode="KeepLastItemInView">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="local:LogEntry">
+                            <Label local:LinkBehavior.FormattedText="{Binding Display}"
+                                   local:LinkBehavior.TextColor="{Binding Level, Converter={StaticResource LevelToColorConverter}}"
+                                   FontSize="12"
+                                   LineBreakMode="WordWrap" Padding="0,2"/>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- ============ ROW 3: SEND CONTROLS ============ -->
+        <Frame Grid.Row="3" Padding="10" CornerRadius="10"
+               BackgroundColor="White" BorderColor="#E5E7EB"
+               HasShadow="False">
+            <VerticalStackLayout Spacing="8">
+                <Label x:Name="SendToLabel" Text="Select a peer"
+                       FontSize="12" TextColor="#6B7280"/>
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Entry x:Name="MessageEntry" Placeholder="Message..."
+                           FontSize="14" IsEnabled="False"
+                           ReturnCommand="{x:Null}" Completed="MessageEntry_Completed"/>
+                    <Button x:Name="SendTextBtn" Grid.Column="1"
+                            Text="Send" FontSize="14" Padding="16,0"
+                            IsEnabled="False" Clicked="SendText_Clicked"
+                            BackgroundColor="#2563EB" TextColor="White"
+                            CornerRadius="6"/>
+                </Grid>
+
+                <Button x:Name="SendFilesBtn" Text="Send Files"
+                        FontSize="14" IsEnabled="False"
+                        Clicked="SendFiles_Clicked"
+                        BackgroundColor="#7C3AED" TextColor="White"
+                        CornerRadius="6"/>
+            </VerticalStackLayout>
+        </Frame>
+    </Grid>
+</ContentPage>
