@@ -380,6 +380,19 @@ public partial class MainPage : ContentPage
         _store.Save();
     }
 
+    // ------------------------------------------------------------------ copy message (long-press context menu)
+
+    private async void CopyMessage_Clicked(object? sender, EventArgs e)
+    {
+        LogEntry? entry = null;
+        if (sender is MenuFlyoutItem item)
+            entry = item.CommandParameter as LogEntry;
+
+        if (entry is null) return;
+
+        await Clipboard.SetTextAsync(entry.Text);
+    }
+
     // ------------------------------------------------------------------ send text
 
     private async void SendText_Clicked(object? sender, EventArgs e)

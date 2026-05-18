@@ -612,6 +612,14 @@ public partial class MainWindow : Window
         }
     }
 
+    // ------------------------------------------------------------------ copy message
+
+    private void CopyMessage_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActivityLog.SelectedItem is LogEntry entry)
+            Clipboard.SetText(entry.Text);
+    }
+
     // ------------------------------------------------------------------ send file
 
     private async void SendFile_Click(object sender, RoutedEventArgs e)

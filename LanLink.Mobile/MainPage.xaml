@@ -96,7 +96,15 @@
                             <Label local:LinkBehavior.FormattedText="{Binding Display}"
                                    local:LinkBehavior.TextColor="{Binding Level, Converter={StaticResource LevelToColorConverter}}"
                                    FontSize="12"
-                                   LineBreakMode="WordWrap" Padding="0,2"/>
+                                   LineBreakMode="WordWrap" Padding="0,2">
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Copy"
+                                                        Clicked="CopyMessage_Clicked"
+                                                        CommandParameter="{Binding .}"/>
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
+                            </Label>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
