@@ -38,6 +38,13 @@ public sealed class NetworkManager : IDisposable
     // Peers we learned about from each connection (for cleanup on disconnect).
     private readonly ConcurrentDictionary<string, HashSet<string>> _learnedFrom = new();
 
+    // Auto-connect throttling / de-duplication (LAN reconnect attempts).
+    //   _connectInProgress: node-ids we're currently dialing (prevents overlap)
+    //   _connectFailLogged: node-ids whose last failure was already logged
+    //     (so we don't spam the activity log every 3 s discovery tick)
+    private readonly ConcurrentDictionary<string, byte> _connectInProgress = new();
+    private readonly ConcurrentDictionary<string, byte> _connectFailLogged = new();
+
     // ---- public surface ----
 
     public string NodeId   => _settings.NodeId;
@@ -66,10 +73,32 @@ public sealed class NetworkManager : IDisposable
 
     public void Start()
     {
-        _listener = new TcpListener(IPAddress.Any, _settings.Port);
-        _listener.Start();
+        try
+        {
+            _listener = new TcpListener(IPAddress.Any, _settings.Port);
+            _listener.Server.SetSocketOption(
+                SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            _listener.ExclusiveAddressUse = false;
+            _listener.Start();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"TCP listener on port {_settings.Port}: {ex.Message}", ex);
+        }
+
         _ = AcceptLoopAsync();
-        _discovery.Start();
+
+        try
+        {
+            _discovery.Start();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"UDP discovery on port {_settings.Port}: {ex.Message}", ex);
+        }
+
         _ = StaleCleanupLoopAsync();
         Log?.Invoke($"Listening on port {_settings.Port}  (TCP + UDP discovery)");
     }
@@ -86,6 +115,7 @@ public sealed class NetworkManager : IDisposable
             {
                 var client = await _listener!.AcceptTcpClientAsync(_cts.Token)
                                              .ConfigureAwait(false);
+                ConfigureKeepAlive(client);
                 var conn = new PeerConnection(client, isOutgoing: false);
                 WireUpConnection(conn);
                 conn.StartReading();
@@ -100,16 +130,26 @@ public sealed class NetworkManager : IDisposable
     //  Outgoing connection  (LAN auto-connect or manual remote)
     // ==================================================================
 
+    /// <summary>Establish an outgoing TCP connection and start the handshake.</summary>
+    private async Task EstablishConnectionAsync(string host, int port)
+    {
+        var client = new TcpClient();
+        ConfigureKeepAlive(client);
+        await client.ConnectAsync(host, port).ConfigureAwait(false);
+        var conn = new PeerConnection(client, isOutgoing: true);
+        WireUpConnection(conn);
+        conn.StartReading();
+        await SendHelloAsync(conn).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// User-initiated connect (manual remote address).  Always logs the result.
+    /// </summary>
     public async Task<bool> ConnectToAsync(string host, int port)
     {
         try
         {
-            var client = new TcpClient();
-            await client.ConnectAsync(host, port).ConfigureAwait(false);
-            var conn = new PeerConnection(client, isOutgoing: true);
-            WireUpConnection(conn);
-            conn.StartReading();
-            await SendHelloAsync(conn).ConfigureAwait(false);
+            await EstablishConnectionAsync(host, port).ConfigureAwait(false);
             Log?.Invoke($"Connected to {host}:{port}");
             return true;
         }
@@ -121,7 +161,36 @@ public sealed class NetworkManager : IDisposable
     }
 
     /// <summary>
-    /// Wait 10 s, then connect if the other side hasn't connected to us yet.
+    /// Auto-connect to a LAN-discovered peer.  De-duplicates overlapping
+    /// attempts (a TCP connect can take ~20 s to fail while discovery fires
+    /// every 3 s) and logs a failure only once — until the next success —
+    /// so a persistently-unreachable peer doesn't flood the activity log.
+    /// </summary>
+    private async Task AutoConnectAsync(string nodeId, string host, int port)
+    {
+        // Only one dial in flight per peer.
+        if (!_connectInProgress.TryAdd(nodeId, 0)) return;
+        try
+        {
+            if (_connections.ContainsKey(nodeId)) return;
+
+            await EstablishConnectionAsync(host, port).ConfigureAwait(false);
+            // Success path: the fail-log gate is cleared in HandleHello once the
+            // handshake completes, so a future drop will log again.
+        }
+        catch (Exception ex)
+        {
+            if (_connectFailLogged.TryAdd(nodeId, 0))
+                Log?.Invoke($"Can't reach {host}:{port} yet ({ex.Message}) — will keep trying quietly.");
+        }
+        finally
+        {
+            _connectInProgress.TryRemove(nodeId, out _);
+        }
+    }
+
+    /// <summary>
+    /// Wait 10 s, then auto-connect if the other side hasn't connected to us yet.
     /// Handles asymmetric UDP discovery (e.g. virtual NICs eating broadcasts).
     /// </summary>
     private async Task FallbackConnectAsync(string nodeId, string host, int port)
@@ -130,7 +199,26 @@ public sealed class NetworkManager : IDisposable
         catch (OperationCanceledException) { return; }
 
         if (!_connections.ContainsKey(nodeId))
-            await ConnectToAsync(host, port).ConfigureAwait(false);
+            await AutoConnectAsync(nodeId, host, port).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Enable TCP keepalive so a peer that vanishes (reboot, cable pull, sleep)
+    /// is detected within ~30 s instead of lingering as a half-open connection
+    /// for the OS default (~2 h).  Without this a rebooted peer's stale entry
+    /// would block it from reconnecting.
+    /// </summary>
+    private static void ConfigureKeepAlive(TcpClient client)
+    {
+        try
+        {
+            var s = client.Client;
+            s.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime,     15);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval,  5);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+        }
+        catch { /* platform may not support all options — keepalive is best-effort */ }
     }
 
     // ==================================================================
@@ -170,7 +258,7 @@ public sealed class NetworkManager : IDisposable
         if (!_connections.ContainsKey(nodeId))
         {
             if (string.Compare(_settings.NodeId, nodeId, StringComparison.Ordinal) < 0)
-                _ = ConnectToAsync(ep.Address.ToString(), tcpPort);
+                _ = AutoConnectAsync(nodeId, ep.Address.ToString(), tcpPort);
             else
                 _ = FallbackConnectAsync(nodeId, ep.Address.ToString(), tcpPort);
         }
@@ -226,16 +314,32 @@ public sealed class NetworkManager : IDisposable
     {
         if (msg.NodeId is null || msg.Name is null) return;
 
-        // Deduplicate: first connection wins.
-        if (_connections.ContainsKey(msg.NodeId))
-        {
-            conn.Dispose();
-            return;
-        }
-
         conn.RemoteNodeId = msg.NodeId;
         conn.RemoteName   = msg.Name;
-        _connections[msg.NodeId] = conn;
+
+        // If we already have a connection for this node, this fresh Hello means
+        // the peer (re)connected — the existing entry is almost always stale
+        // (peer rebooted / network dropped and we never saw a FIN).  Replace it
+        // with the new connection rather than rejecting the new one; rejecting
+        // would leave the peer permanently unable to reconnect.
+        //
+        // Ordering matters: install the new connection in the slot *before*
+        // disposing the old one.  (Disposing locally cancels the old read loop
+        // without firing Disconnected, but installing first keeps the slot
+        // consistent for any concurrent lookups.)
+        if (_connections.TryGetValue(msg.NodeId, out var existing)
+            && !ReferenceEquals(existing, conn))
+        {
+            _connections[msg.NodeId] = conn;
+            try { existing.Dispose(); } catch { }
+        }
+        else
+        {
+            _connections[msg.NodeId] = conn;
+        }
+
+        // Handshake completed — allow a future failure to be logged again.
+        _connectFailLogged.TryRemove(msg.NodeId, out _);
 
         var created = new Peer { NodeId = msg.NodeId };
         bool isNew  = _peers.TryAdd(msg.NodeId, created);
@@ -408,9 +512,18 @@ public sealed class NetworkManager : IDisposable
 
     private void OnConnectionDisconnected(PeerConnection conn)
     {
-        if (conn.RemoteNodeId is null) return;
+        if (conn.RemoteNodeId is null) { try { conn.Dispose(); } catch { } return; }
 
-        _connections.TryRemove(conn.RemoteNodeId, out _);
+        // Only tear down peer state if this connection still owns the slot.
+        // If it was already replaced by a newer connection (e.g. the peer
+        // reconnected), the slot holds the new conn — leave everything intact
+        // and just drop this stale socket.
+        if (!_connections.TryRemove(
+                new KeyValuePair<string, PeerConnection>(conn.RemoteNodeId, conn)))
+        {
+            try { conn.Dispose(); } catch { }
+            return;
+        }
 
         // Mark peer as not connected.
         if (_peers.TryGetValue(conn.RemoteNodeId, out var peer))

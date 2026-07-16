@@ -35,7 +35,8 @@ public partial class MainWindow : Window
 
     // System tray
     private Forms.NotifyIcon? _trayIcon;
-    private bool _reallyClosing;  // true only when user picks Exit from tray menu
+    private bool _reallyClosing;  // true only when user picks Exit (tray or IPC)
+    private bool _cleanedUp;      // guards double dispose of network/tray
 
     // Prevent double-init (Initialize() can be called from App or from Loaded)
     private bool _initialized;
@@ -109,10 +110,42 @@ public partial class MainWindow : Window
         }
 
         // Actually exiting — clean up.
-        _trayIcon?.Dispose();
-        _trayIcon = null;
-        _network.Dispose();
+        CleanupAndDispose();
         base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// Force a real exit.  Used by the single-instance IPC "exit" command
+    /// (<c>LanLink.exe --exit</c>) so an installer can shut LanLink down before
+    /// replacing the executable.  Works whether or not the window was ever shown.
+    /// </summary>
+    public void RequestExit()
+    {
+        _reallyClosing = true;
+
+        if (IsVisible)
+        {
+            // Closing a visible window runs OnClosing → CleanupAndDispose.
+            Close();
+        }
+        else
+        {
+            // A window started with --minimized was never shown, so closing it
+            // won't raise Closing — clean up directly.
+            CleanupAndDispose();
+        }
+
+        Application.Current.Shutdown();
+    }
+
+    private void CleanupAndDispose()
+    {
+        if (_cleanedUp) return;
+        _cleanedUp = true;
+
+        try { _trayIcon?.Dispose(); } catch { }
+        _trayIcon = null;
+        try { _network.Dispose(); } catch { }
     }
 
     // ------------------------------------------------------------------ system tray
@@ -142,11 +175,7 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    private void ExitApp()
-    {
-        _reallyClosing = true;
-        Close();
-    }
+    private void ExitApp() => RequestExit();
 
     private static System.Drawing.Icon GetAppIcon()
     {

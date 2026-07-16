@@ -11,7 +11,7 @@ public sealed class AppSettings
     public string       DisplayName    { get; set; } = Environment.MachineName;
     public string       DownloadFolder { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "LanLink");
-    public int          Port           { get; set; } = 48656;
+    public int          Port           { get; set; } = 37656;
     public List<string> SavedRemotes   { get; set; } = new();
     public bool         RunOnStartup   { get; set; }
     public bool         StartMinimized { get; set; }

@@ -15,7 +15,7 @@ public sealed class AppSettings
     {
         NodeId      = Preferences.Get("NodeId", Guid.NewGuid().ToString("N")[..12]);
         DisplayName = Preferences.Get("DisplayName", DeviceInfo.Name ?? "Android");
-        Port        = Preferences.Get("Port", 48656);
+        Port        = Preferences.Get("Port", 37656);
 
         // Default download location: app-specific external storage (visible in file managers).
 #if ANDROID

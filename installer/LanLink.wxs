@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!-- These are normally supplied by build-msi.bat via -d; defaults let the
+       file build on its own for quick validation. -->
+  <?ifndef Version?>    <?define Version    = "1.0.0.0"?>            <?endif?>
+  <?ifndef PublishDir?> <?define PublishDir = "publish"?>           <?endif?>
+
+  <Package Name="LanLink"
+           Manufacturer="LanLink"
+           Version="$(var.Version)"
+           UpgradeCode="7E3C1A02-6B4D-4E8F-9C21-4A5B6C7D8E90"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="LanLink — LAN file and text sharing"
+                        Keywords="LanLink, LAN, file transfer, installer" />
+
+    <!-- Windows uses ProductVersion + UpgradeCode to recognise a newer build
+         and remove the older one automatically. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of LanLink is already installed. Setup will now exit." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Use the app's own embedded icon for Add/Remove Programs and shortcuts. -->
+    <Icon Id="LanLinkIcon" SourceFile="$(var.PublishDir)\LanLink.exe" />
+    <Property Id="ARPPRODUCTICON" Value="LanLinkIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- Autostart-on-boot choice.  Default checked; the setup checkbox toggles it. -->
+    <Property Id="AUTOSTART" Value="1" Secure="yes" />
+
+    <!-- Default install location:
+           x64 package  -> C:\Program Files\LanLink
+           x86 package  -> C:\Program Files (x86)\LanLink -->
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="LanLink" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="LanLink" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <!-- Before an upgrade replaces the exe, tell any running LanLink to exit
+         (IPC) and wait for it to release the file.  Skipped on first install
+         (no previous copy present). -->
+    <CustomAction Id="StopRunningLanLink"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]LanLink.exe&quot; --exit"
+                  Execute="immediate"
+                  Return="ignore"
+                  Impersonate="yes" />
+
+    <InstallExecuteSequence>
+      <Custom Action="StopRunningLanLink" Before="InstallValidate"
+              Condition="WIX_UPGRADE_DETECTED" />
+    </InstallExecuteSequence>
+
+    <!-- UI: welcome -> license -> install dir -> autostart choice -> ready. -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <UI>
+      <!-- Insert the custom "Autostart" dialog between the install-dir dialog
+           and the ready-to-install dialog.  Higher Order than the stock
+           navigation so our NewDialog wins. -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="AutostartDlg"
+               Order="10" Condition="WIXUI_INSTALLDIR_VALID = &quot;1&quot;" />
+      <Publish Dialog="AutostartDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg"
+               Order="10" />
+      <Publish Dialog="AutostartDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg"
+               Order="10" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AutostartDlg"
+               Order="10" Condition="NOT Installed" />
+    </UI>
+  </Package>
+
+  <!-- ===================================================================== -->
+  <!--  Installed payload                                                     -->
+  <!-- ===================================================================== -->
+  <Fragment>
+    <ComponentGroup Id="AppComponents">
+
+      <!-- The self-contained single-file executable. -->
+      <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="LanLinkExe" Source="$(var.PublishDir)\LanLink.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ProgramMenuFolder"
+                    Name="LanLink"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="LanLinkIcon"
+                    Advertise="yes" />
+        </File>
+      </Component>
+
+      <!-- Registry Run entry — installed only when the user leaves the
+           autostart checkbox ticked.  Launches minimized to the tray. -->
+      <Component Id="AutostartEntry" Directory="INSTALLFOLDER"
+                 Guid="9F1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D"
+                 Condition="AUTOSTART = 1">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                       Name="LanLink"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]LanLink.exe&quot; --minimized" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ===================================================================== -->
+  <!--  Custom "Autostart" wizard page                                        -->
+  <!-- ===================================================================== -->
+  <Fragment>
+    <UI>
+      <Dialog Id="AutostartDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="280" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="{\WixUI_Font_Title}Startup options" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="Choose whether LanLink starts automatically." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="AutostartCheckBox" Type="CheckBox" X="20" Y="80" Width="330" Height="18"
+                 Property="AUTOSTART" CheckBoxValue="1"
+                 Text="Start LanLink automatically when Windows starts (minimized to the tray)" />
+        <Control Id="AutostartHint" Type="Text" X="36" Y="102" Width="314" Height="30" Transparent="yes"
+                 NoPrefix="yes"
+                 Text="You can change this later in LanLink's Settings window." />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes"
+                 Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes"
+                 Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+</Wix>
