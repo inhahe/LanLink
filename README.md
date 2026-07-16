@@ -44,7 +44,7 @@ Run `build-msi.bat` to produce `LanLink-<version>.msi` in the current directory.
 
 - **Install location**: `C:\Program Files\LanLink` (a 64-bit package; a 32-bit build would use `C:\Program Files (x86)\LanLink`).
 - **Autostart prompt**: setup asks whether LanLink should start automatically when Windows starts (minimized to the tray). This writes an `HKLM\...\Run` entry.
-- **Upgrades**: the MSI's `ProductVersion` tracks the exe version, so installing a newer build automatically removes the old one. Before replacing files it tells any running LanLink to quit via the `--exit` IPC command and waits for it to release the executable.
+- **Upgrades**: the MSI's `ProductVersion` tracks the exe version, so installing a newer build automatically removes the old one. The previous install location is remembered (via `HKLM\SOFTWARE\LanLink\InstallDir`), so upgrades reinstall to the same folder even if you originally chose a custom path. Before replacing files it tells any running LanLink to quit via the `--exit` IPC command and waits for it to release the executable.
 
 Bump `VERSION` at the top of `build-msi.bat` for each release — it flows into both the exe version and the MSI `ProductVersion`.
 

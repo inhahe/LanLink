@@ -40,6 +40,19 @@
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
+    <!-- Remember where a previous version was installed.  On upgrade this
+         RegistrySearch (run during AppSearch, before the UI and before the
+         StopRunningLanLink custom action) overrides INSTALLFOLDER with the
+         old path, so a custom install location is honored and the "exit the
+         running app" action targets the correct exe.  If the value is absent
+         (fresh install, or upgrading from a build that predates this key),
+         INSTALLFOLDER keeps its default of ProgramFiles6432\LanLink. -->
+    <Property Id="INSTALLFOLDER">
+      <RegistrySearch Id="PreviousInstallDir"
+                      Root="HKLM" Key="SOFTWARE\LanLink"
+                      Name="InstallDir" Type="raw" />
+    </Property>
+
     <Feature Id="Main" Title="LanLink" Level="1">
       <ComponentGroupRef Id="AppComponents" />
     </Feature>
@@ -94,6 +107,15 @@
                     Icon="LanLinkIcon"
                     Advertise="yes" />
         </File>
+      </Component>
+
+      <!-- Persist the chosen install location so a later upgrade can find it
+           (read back by the PreviousInstallDir RegistrySearch above). -->
+      <Component Id="RememberInstallDir" Directory="INSTALLFOLDER"
+                 Guid="4B2E9A17-8C6D-4F03-9A1E-7D5C2B0F6A38">
+        <RegistryValue Root="HKLM" Key="SOFTWARE\LanLink"
+                       Name="InstallDir" Type="string"
+                       Value="[INSTALLFOLDER]" KeyPath="yes" />
       </Component>
 
       <!-- Registry Run entry — installed only when the user leaves the
