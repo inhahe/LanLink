@@ -8,6 +8,11 @@
     <RootNamespace>LanLink</RootNamespace>
     <AssemblyName>LanLink</AssemblyName>
 
+    <!-- Embed the app icon in the exe so the window, taskbar, tray and Explorer
+         all show real branding.  The installer reuses this small .ico too,
+         instead of embedding the whole exe just to obtain an icon. -->
+    <ApplicationIcon>LanLink.ico</ApplicationIcon>
+
     <!-- Version metadata.  The build-msi.bat overrides these via -p:Version so
          the exe's version and the MSI ProductVersion stay in lockstep and
          Windows can tell a newer build from an older one during upgrade. -->

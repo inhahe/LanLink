@@ -40,7 +40,7 @@ echo.
 echo [4/4] Building MSI...
 wix build "%WXS%" -arch x64 ^
     -d Version=%VERSION% -d PublishDir="%PUBLISH%" ^
-    -b "%SCRIPT%installer" ^
+    -b "%SCRIPT%installer" -b "%SCRIPT%LanLink" ^
     -ext WixToolset.UI.wixext ^
     -o "%OUT%"
 if errorlevel 1 ( echo ERROR: MSI build failed & exit /b 1 )

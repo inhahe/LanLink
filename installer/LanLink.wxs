@@ -24,8 +24,11 @@
 
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- Use the app's own embedded icon for Add/Remove Programs and shortcuts. -->
-    <Icon Id="LanLinkIcon" SourceFile="$(var.PublishDir)\LanLink.exe" />
+    <!-- Icon for Add/Remove Programs and the Start Menu shortcut.  Point at the
+         small standalone .ico (resolved via the LanLink project bind path passed
+         to `wix build`), NOT at LanLink.exe — sourcing it from the 71 MB exe made
+         the MSI embed the whole binary a second time, doubling its size. -->
+    <Icon Id="LanLinkIcon" SourceFile="LanLink.ico" />
     <Property Id="ARPPRODUCTICON" Value="LanLinkIcon" />
     <Property Id="ARPNOREPAIR" Value="1" />
 
