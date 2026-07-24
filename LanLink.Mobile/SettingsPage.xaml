@@ -32,6 +32,18 @@
                            WidthRequest="120" HorizontalOptions="Start"/>
                 </VerticalStackLayout>
 
+                <!-- Accept external connections -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                        <Label Text="Accept connections from outside the LAN"
+                               FontSize="14" TextColor="#111827"/>
+                        <Label Text="When off, only devices on your local network can connect to you. Connections you start yourself always work."
+                               FontSize="11" TextColor="#9CA3AF"/>
+                    </VerticalStackLayout>
+                    <Switch x:Name="ExternalSwitch" Grid.Column="1"
+                            VerticalOptions="Center"/>
+                </Grid>
+
                 <!-- Node ID (read-only) -->
                 <VerticalStackLayout Spacing="4">
                     <Label Text="Node ID" FontSize="12" TextColor="#6B7280"/>

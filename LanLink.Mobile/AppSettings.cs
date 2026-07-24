@@ -11,11 +11,19 @@ public sealed class AppSettings
     public int    Port           { get; set; }
     public List<string> SavedRemotes { get; set; } = new();
 
+    /// <summary>
+    /// Accept inbound TCP connections from addresses outside the local network.
+    /// Off by default: only LAN / loopback peers may connect in.  (Outgoing
+    /// "remote address" connections you initiate are always allowed.)
+    /// </summary>
+    public bool AcceptExternalConnections { get; set; }
+
     public AppSettings()
     {
         NodeId      = Preferences.Get("NodeId", Guid.NewGuid().ToString("N")[..12]);
         DisplayName = Preferences.Get("DisplayName", DeviceInfo.Name ?? "Android");
         Port        = Preferences.Get("Port", 37656);
+        AcceptExternalConnections = Preferences.Get("AcceptExternalConnections", false);
 
         // Default download location: app-specific external storage (visible in file managers).
 #if ANDROID
@@ -40,6 +48,7 @@ public sealed class AppSettings
         Preferences.Set("DisplayName", DisplayName);
         Preferences.Set("DownloadFolder", DownloadFolder);
         Preferences.Set("Port", Port);
+        Preferences.Set("AcceptExternalConnections", AcceptExternalConnections);
     }
 
     public static AppSettings Load() => new();

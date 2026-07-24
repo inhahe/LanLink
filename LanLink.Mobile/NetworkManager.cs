@@ -112,6 +112,19 @@ public sealed class NetworkManager : IDisposable
             {
                 var client = await _listener!.AcceptTcpClientAsync(_cts.Token)
                                              .ConfigureAwait(false);
+
+                // Unless opted in, reject inbound connections from outside the
+                // local network.  Outgoing connections you initiate are
+                // unaffected — only incoming non-LAN ones are gated here.
+                if (!_settings.AcceptExternalConnections && !IsLanClient(client))
+                {
+                    var rep = client.Client.RemoteEndPoint;
+                    Log?.Invoke($"Rejected connection from {rep} " +
+                                "(outside LAN — enable \"Accept connections from outside the LAN\" in Settings)");
+                    try { client.Close(); } catch { }
+                    continue;
+                }
+
                 var conn = new PeerConnection(client, isOutgoing: false);
                 WireUpConnection(conn);
                 conn.StartReading();
@@ -491,6 +504,54 @@ public sealed class NetworkManager : IDisposable
                     PeerRemoved?.Invoke(p.NodeId);
             }
         }
+    }
+
+    // ==================================================================
+    //  LAN address classification
+    // ==================================================================
+
+    private static bool IsLanClient(TcpClient client)
+    {
+        try
+        {
+            if (client.Client.RemoteEndPoint is IPEndPoint ep)
+                return IsPrivateOrLan(ep.Address);
+        }
+        catch { }
+        return false;   // unknown endpoint → treat as external (safer)
+    }
+
+    /// <summary>
+    /// True for loopback, private (RFC 1918) IPv4, link-local, and private
+    /// IPv6 (ULA / link-local) addresses — anything reachable only on the local
+    /// machine or LAN, never a routable public address.
+    /// </summary>
+    internal static bool IsPrivateOrLan(IPAddress ip)
+    {
+        if (IPAddress.IsLoopback(ip)) return true;
+
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            if (ip.IsIPv4MappedToIPv6) { ip = ip.MapToIPv4(); }
+            else
+            {
+                if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal) return true;
+                var b6 = ip.GetAddressBytes();
+                return (b6[0] & 0xFE) == 0xFC;   // ULA fc00::/7
+            }
+        }
+
+        if (ip.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var b = ip.GetAddressBytes();
+            return b[0] == 10
+                || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                || (b[0] == 192 && b[1] == 168)
+                || (b[0] == 169 && b[1] == 254)   // link-local (APIPA)
+                || b[0] == 127;
+        }
+
+        return false;
     }
 
     // ==================================================================

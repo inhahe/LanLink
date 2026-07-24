@@ -22,7 +22,8 @@ public partial class SettingsWindow : Window
         PortBox.Text   = settings.Port.ToString();
         NodeIdBox.Text = settings.NodeId;
         StartupCheck.IsChecked   = settings.RunOnStartup;
-        MinimizedCheck.IsChecked = settings.StartMinimized;
+        StartModeCombo.SelectedIndex = (int)settings.StartupMode;   // Normal=0, Minimized=1, Tray=2
+        ExternalCheck.IsChecked  = settings.AcceptExternalConnections;
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
@@ -48,16 +49,17 @@ public partial class SettingsWindow : Window
         if (int.TryParse(PortBox.Text.Trim(), out int port) && port > 1024 && port < 65536)
             _settings.Port = port;
 
-        _settings.RunOnStartup   = StartupCheck.IsChecked == true;
-        _settings.StartMinimized = MinimizedCheck.IsChecked == true;
-        ApplyStartupRegistry(_settings.RunOnStartup, _settings.StartMinimized);
+        _settings.RunOnStartup = StartupCheck.IsChecked == true;
+        _settings.StartupMode  = (StartupMode)Math.Max(0, StartModeCombo.SelectedIndex);
+        _settings.AcceptExternalConnections = ExternalCheck.IsChecked == true;
+        ApplyStartupRegistry(_settings.RunOnStartup, _settings.StartupMode);
 
         _settings.Save();
         DialogResult = true;
         Close();
     }
 
-    private static void ApplyStartupRegistry(bool enable, bool minimized)
+    private static void ApplyStartupRegistry(bool enable, StartupMode mode)
     {
         try
         {
@@ -68,10 +70,13 @@ public partial class SettingsWindow : Window
             {
                 string exePath = Environment.ProcessPath
                     ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LanLink.exe");
-                string value = minimized
-                    ? $"\"{exePath}\" --minimized"
-                    : $"\"{exePath}\"";
-                key.SetValue(AppName, value);
+                string flag = mode switch
+                {
+                    StartupMode.Tray      => " --minimized",
+                    StartupMode.Minimized => " --minimized-taskbar",
+                    _                     => ""
+                };
+                key.SetValue(AppName, $"\"{exePath}\"{flag}");
             }
             else
             {

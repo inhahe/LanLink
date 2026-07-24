@@ -76,10 +76,16 @@ public sealed class NetworkManager : IDisposable
         try
         {
             _listener = new TcpListener(IPAddress.Any, _settings.Port);
-            _listener.Server.SetSocketOption(
-                SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _listener.ExclusiveAddressUse = false;
+            // Claim the port exclusively.  This is a single-instance app, so a
+            // second copy MUST fail to bind (rather than silently sharing the
+            // port via SO_REUSEADDR and then failing to receive reliably).  The
+            // caller turns an in-use failure into "activate the running copy".
+            _listener.ExclusiveAddressUse = true;
             _listener.Start();
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+        {
+            throw new PortInUseException(_settings.Port, ex);
         }
         catch (Exception ex)
         {
@@ -115,6 +121,20 @@ public sealed class NetworkManager : IDisposable
             {
                 var client = await _listener!.AcceptTcpClientAsync(_cts.Token)
                                              .ConfigureAwait(false);
+
+                // Unless the user has opted in, reject inbound connections that
+                // originate from outside the local network.  Outgoing (manual
+                // remote) connections are unaffected — only *incoming* ones from
+                // non-LAN addresses are gated here.
+                if (!_settings.AcceptExternalConnections && !IsLanClient(client))
+                {
+                    var rep = client.Client.RemoteEndPoint;
+                    Log?.Invoke($"Rejected connection from {rep} " +
+                                "(outside LAN — enable \"Accept connections from outside the LAN\" in Settings)");
+                    try { client.Close(); } catch { }
+                    continue;
+                }
+
                 ConfigureKeepAlive(client);
                 var conn = new PeerConnection(client, isOutgoing: false);
                 WireUpConnection(conn);
@@ -581,6 +601,54 @@ public sealed class NetworkManager : IDisposable
     }
 
     // ==================================================================
+    //  LAN address classification
+    // ==================================================================
+
+    private static bool IsLanClient(TcpClient client)
+    {
+        try
+        {
+            if (client.Client.RemoteEndPoint is IPEndPoint ep)
+                return IsPrivateOrLan(ep.Address);
+        }
+        catch { }
+        return false;   // unknown endpoint → treat as external (safer)
+    }
+
+    /// <summary>
+    /// True for loopback, private (RFC 1918) IPv4, link-local, and private
+    /// IPv6 (ULA / link-local) addresses — i.e. anything reachable only on the
+    /// local machine or LAN, never a routable public address.
+    /// </summary>
+    internal static bool IsPrivateOrLan(IPAddress ip)
+    {
+        if (IPAddress.IsLoopback(ip)) return true;
+
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            if (ip.IsIPv4MappedToIPv6) { ip = ip.MapToIPv4(); }
+            else
+            {
+                if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal) return true;
+                var b6 = ip.GetAddressBytes();
+                return (b6[0] & 0xFE) == 0xFC;   // ULA fc00::/7
+            }
+        }
+
+        if (ip.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var b = ip.GetAddressBytes();
+            return b[0] == 10
+                || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                || (b[0] == 192 && b[1] == 168)
+                || (b[0] == 169 && b[1] == 254)   // link-local (APIPA)
+                || b[0] == 127;
+        }
+
+        return false;
+    }
+
+    // ==================================================================
     //  Dispose
     // ==================================================================
 
@@ -593,4 +661,18 @@ public sealed class NetworkManager : IDisposable
         { try { c.Dispose(); } catch { } }
         _connections.Clear();
     }
+}
+
+/// <summary>
+/// Thrown by <see cref="NetworkManager.Start"/> when the TCP port is already
+/// in use — which for this single-instance app means another copy of LanLink
+/// is already running and owns the port.
+/// </summary>
+public sealed class PortInUseException : Exception
+{
+    public int Port { get; }
+
+    public PortInUseException(int port, Exception inner)
+        : base($"Port {port} is already in use (another LanLink instance is running).", inner)
+        => Port = port;
 }

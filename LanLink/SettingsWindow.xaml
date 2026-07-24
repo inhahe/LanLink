@@ -37,11 +37,27 @@
             <TextBox x:Name="PortBox" Padding="6,4" FontSize="13"
                      Margin="0,0,0,14" Width="100" HorizontalAlignment="Left"/>
 
+            <!-- Start mode -->
+            <TextBlock Text="When LanLink starts" FontSize="12" Foreground="#6B7280"
+                       Margin="0,0,0,3"/>
+            <ComboBox x:Name="StartModeCombo" FontSize="13" Margin="0,0,0,14"
+                      Width="220" HorizontalAlignment="Left">
+                <ComboBoxItem Content="Show window normally"/>
+                <ComboBoxItem Content="Start minimized (taskbar)"/>
+                <ComboBoxItem Content="Start minimized to tray"/>
+            </ComboBox>
+
             <!-- Run on startup -->
-            <CheckBox x:Name="StartupCheck" Content="Run on startup"
-                      FontSize="13" Margin="0,0,0,6"/>
-            <CheckBox x:Name="MinimizedCheck" Content="Start minimized to tray"
-                      FontSize="13" Margin="16,0,0,14" Foreground="#6B7280"/>
+            <CheckBox x:Name="StartupCheck" Content="Start LanLink when Windows starts"
+                      FontSize="13" Margin="0,0,0,10"/>
+
+            <!-- Accept external connections -->
+            <CheckBox x:Name="ExternalCheck"
+                      Content="Accept connections from outside the LAN"
+                      FontSize="13" Margin="0,0,0,3"/>
+            <TextBlock Text="When off, only devices on your local network can connect to you. Connections you start yourself (Remote address) always work."
+                       FontSize="11" Foreground="#9CA3AF" TextWrapping="Wrap"
+                       Margin="0,0,0,14"/>
 
             <!-- Node ID (read-only, informational) -->
             <TextBlock Text="Node ID" FontSize="12" Foreground="#6B7280"

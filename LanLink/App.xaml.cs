@@ -21,8 +21,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        bool wantExit    = e.Args.Contains("--exit",      StringComparer.OrdinalIgnoreCase);
-        bool wantMinimal = e.Args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+        bool wantExit        = e.Args.Contains("--exit",              StringComparer.OrdinalIgnoreCase);
+        bool wantTray        = e.Args.Contains("--minimized",         StringComparer.OrdinalIgnoreCase);
+        bool wantMinTaskbar  = e.Args.Contains("--minimized-taskbar", StringComparer.OrdinalIgnoreCase);
+
+        // A launch that carries any "start hidden/minimized" flag comes from
+        // autostart, not a manual double-click — so a duplicate launch should
+        // stay quiet instead of popping the existing window to the foreground.
+        bool wantMinimal = wantTray || wantMinTaskbar;
 
         // Try to acquire single-instance mutex.
         _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
@@ -73,19 +79,50 @@ public partial class App : Application
         };
         _listenerThread.Start();
 
-        // Start hidden if launched with --minimized OR if the user enabled
-        // "Start minimized to tray" in Settings.  Relying on the CLI flag alone
-        // meant the setting was ignored on a normal (manual) launch and only
-        // worked when Windows started us via the registry Run key.
-        bool startHidden = wantMinimal || AppSettings.Load().StartMinimized;
+        // Decide how to appear.  The saved StartupMode is the default; a CLI
+        // flag (used by the autostart registry entry) overrides it.  Honouring
+        // the setting here means a manual launch also respects it, not just the
+        // Windows-startup launch.
+        StartupMode mode = AppSettings.Load().StartupMode;
+        if (wantTray)            mode = StartupMode.Tray;
+        else if (wantMinTaskbar) mode = StartupMode.Minimized;
 
         var win = new MainWindow();
         MainWindow = win;
 
-        if (startHidden)
-            win.Initialize();   // start networking without showing the window
-        else
-            win.Show();
+        switch (mode)
+        {
+            case StartupMode.Tray:
+                win.Initialize();   // start networking without showing the window
+                break;
+
+            case StartupMode.Minimized:
+                win.WindowState = WindowState.Minimized;
+                win.Show();         // visible on the taskbar, just minimized
+                break;
+
+            default:
+                win.Show();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Called when this instance thought it was the primary (it acquired the
+    /// single-instance mutex) but then discovered the network port is already
+    /// owned by another LanLink — e.g. a leftover copy from before the
+    /// single-instance guard existed.  Ask the running copy to surface its
+    /// window.  The caller then exits this instance.
+    /// </summary>
+    public void SignalOtherInstanceToShow()
+    {
+        // Stop our own IPC listener first so we don't swallow the signal we're
+        // about to send (both instances wait on the same auto-reset event, and
+        // only one waiter is released per Set).
+        try { _showEvent?.Dispose(); _showEvent = null; } catch { }
+        try { _exitEvent?.Dispose(); _exitEvent = null; } catch { }
+
+        SignalRunningInstance(ShowEventName);
     }
 
     // ------------------------------------------------------------------ IPC helpers

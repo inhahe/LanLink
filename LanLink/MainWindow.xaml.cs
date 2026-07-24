@@ -84,6 +84,18 @@ public partial class MainWindow : Window
                    $"(port {_settings.Port})");
             AddLog($"Downloads go to  {_settings.DownloadFolder}");
         }
+        catch (PortInUseException)
+        {
+            // Another LanLink already owns the port.  The single-instance mutex
+            // normally catches this earlier, but a leftover copy from before the
+            // guard existed (or one running under a different mutex) can slip
+            // through.  Rather than sit here unable to send or receive, bring
+            // the running copy to the foreground and exit.
+            if (Application.Current is App app)
+                app.SignalOtherInstanceToShow();
+            RequestExit();
+            return;
+        }
         catch (Exception ex)
         {
             AddLog($"Failed to start: {ex.Message}", LogLevel.Error);

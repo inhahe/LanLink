@@ -471,15 +471,26 @@ public partial class MainPage : ContentPage
                 PickerTitle = "Select files to send"
             });
 
+            // PickMultipleAsync returns null (not an empty list) when cancelled.
+            if (results is null) return;
+
             foreach (var file in results)
             {
+                // Immediate feedback so the user always sees *something* happen
+                // after picking — even before the transfer's own progress lines.
+                AddLog($"Sending {file.FileName} to {_selectedPeer.Name}\u2026",
+                       LogLevel.Transfer);
                 try
                 {
-                    await _transfer.SendFileAsync(_selectedPeer.NodeId, file.FullPath);
+                    // On Android the picked file's FullPath is often a content
+                    // URI that isn't a real filesystem path, so copy the stream
+                    // to a local cache file first and send that.
+                    string path = await EnsureLocalPathAsync(file);
+                    await _transfer.SendFileAsync(_selectedPeer.NodeId, path);
                 }
                 catch (Exception ex)
                 {
-                    AddLog($"Failed: {ex.Message}", LogLevel.Error);
+                    AddLog($"Failed to send {file.FileName}: {ex.Message}", LogLevel.Error);
                 }
             }
         }
@@ -488,6 +499,30 @@ public partial class MainPage : ContentPage
             if (ex is not TaskCanceledException)
                 AddLog($"Picker error: {ex.Message}", LogLevel.Error);
         }
+    }
+
+    /// <summary>
+    /// Return a real, readable filesystem path for a picked file.  If the
+    /// picker's FullPath already points at a readable file we use it directly;
+    /// otherwise (typical for Android content:// URIs) we copy the file's
+    /// stream into the app cache and return that path.
+    /// </summary>
+    private static async Task<string> EnsureLocalPathAsync(FileResult file)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(file.FullPath) && File.Exists(file.FullPath))
+                return file.FullPath;
+        }
+        catch { /* fall through to copy */ }
+
+        string dest = Path.Combine(FileSystem.CacheDirectory, file.FileName);
+        using (var src = await file.OpenReadAsync().ConfigureAwait(false))
+        using (var dst = File.Create(dest))
+        {
+            await src.CopyToAsync(dst).ConfigureAwait(false);
+        }
+        return dest;
     }
 
     // ------------------------------------------------------------------ connect remote

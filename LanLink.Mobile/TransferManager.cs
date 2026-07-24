@@ -81,7 +81,12 @@ public sealed class TransferManager
     public async Task SendFileAsync(string targetId, string filePath)
     {
         var fi = new FileInfo(filePath);
-        if (!fi.Exists) return;
+        if (!fi.Exists)
+        {
+            // Don't fail silently — the user picked a file and expects feedback.
+            Log?.Invoke($"Can't send \u2014 file not found: {filePath}");
+            return;
+        }
 
         string tid = NewTransferId();
         var tracker = new ProgressTracker(tid, fi.Name, fi.Length);

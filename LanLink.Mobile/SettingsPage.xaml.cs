@@ -14,6 +14,7 @@ public partial class SettingsPage : ContentPage
         FolderEntry.Text = _settings.DownloadFolder;
         PortEntry.Text   = _settings.Port.ToString();
         NodeIdLabel.Text = _settings.NodeId;
+        ExternalSwitch.IsToggled = _settings.AcceptExternalConnections;
     }
 
     private async void Save_Clicked(object? sender, EventArgs e)
@@ -25,6 +26,8 @@ public partial class SettingsPage : ContentPage
 
         if (int.TryParse(PortEntry.Text?.Trim(), out int port) && port > 1024 && port < 65536)
             _settings.Port = port;
+
+        _settings.AcceptExternalConnections = ExternalSwitch.IsToggled;
 
         _settings.Save();
         await Shell.Current.GoToAsync("..");

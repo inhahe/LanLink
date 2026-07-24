@@ -52,10 +52,13 @@ Bump `VERSION` at the top of `build-msi.bat` for each release — it flows into 
 
 | Flag | Effect |
 |------|--------|
-| `--minimized` | Start hidden in the tray (also honored automatically when "Start minimized" is enabled in Settings). |
+| `--minimized` | Start hidden in the tray (only the tray icon shows). |
+| `--minimized-taskbar` | Start minimized to the taskbar (window exists but is minimized). |
 | `--exit` | Signal the already-running instance to exit cleanly, then wait for it to terminate. Used by the installer during upgrades. |
 
-LanLink is single-instance: launching it again brings the existing window forward (a `--minimized` relaunch is ignored so it won't pop the window open at boot).
+The startup appearance is normally driven by the **When LanLink starts** setting (Show window normally / Start minimized (taskbar) / Start minimized to tray); the flags above are how the Windows-startup entry passes that choice and override the setting for a single launch.
+
+LanLink is single-instance: launching it again brings the existing window forward and exits the new copy (a `--minimized`/`--minimized-taskbar` relaunch is ignored so autostart won't pop the window open at boot). It claims the network port exclusively, so if a stale copy is already running, a second launch surfaces that copy rather than starting a second, half-working instance.
 
 ### Android
 
@@ -106,8 +109,9 @@ On Android, no firewall setup is needed — the manifest declares the required p
 
 To connect two instances over the internet:
 1. Forward port 37656 (TCP) on the remote router to the target machine
-2. On the connecting side, enter the public IP or domain in the "Remote address" field
-3. Once connected, all LAN peers on both sides can see each other (bridging)
+2. On the **target** machine, enable **Accept connections from outside the LAN** in Settings (off by default — inbound non-LAN connections are rejected for safety). Connections you *initiate* with the "Remote address" field always work regardless of this setting.
+3. On the connecting side, enter the public IP or domain in the "Remote address" field
+4. Once connected, all LAN peers on both sides can see each other (bridging)
 
 ## Download folder
 

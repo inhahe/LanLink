@@ -5,12 +5,19 @@ setlocal enabledelayedexpansion
 ::  Builds the LanLink Windows installer (LanLink-<version>.msi) and drops it
 ::  in the directory this script is run from.
 ::
-::  Bump VERSION for each release so Windows sees the new build as an upgrade.
+::  The version comes from the VERSION file next to this script (single source
+::  of truth).  Bump it for each release so Windows sees the new build as an
+::  upgrade.
 :: ===========================================================================
 
-set "VERSION=1.0.0.0"
-
 set "SCRIPT=%~dp0"
+
+:: --- Read the version from the VERSION file ---
+if not exist "%SCRIPT%VERSION" ( echo ERROR: VERSION file not found at %SCRIPT%VERSION & exit /b 1 )
+set /p VERSION=<"%SCRIPT%VERSION"
+set "VERSION=%VERSION: =%"
+if "%VERSION%"=="" ( echo ERROR: VERSION file is empty & exit /b 1 )
+
 set "PROJECT=%SCRIPT%LanLink\LanLink.csproj"
 set "PUBLISH=%SCRIPT%installer\publish"
 set "WXS=%SCRIPT%installer\LanLink.wxs"
