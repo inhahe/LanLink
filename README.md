@@ -43,10 +43,14 @@ dotnet publish LanLink/LanLink.csproj -c Release -r win-x64 --self-contained tru
 Run `build-msi.bat` to produce `LanLink-<version>.msi` in the current directory. It publishes a self-contained single-file exe and packages it with [WiX](https://wixtoolset.org/) (installed automatically as a global dotnet tool if missing).
 
 - **Install location**: `C:\Program Files\LanLink` (a 64-bit package; a 32-bit build would use `C:\Program Files (x86)\LanLink`).
-- **Autostart prompt**: setup asks whether LanLink should start automatically when Windows starts (minimized to the tray). This writes an `HKLM\...\Run` entry.
+- **Autostart prompt**: setup asks whether LanLink should start automatically when Windows starts (minimized to the tray). Setup only *records* that answer; LanLink applies it on first run by writing its own per-user entry — see [Starting with Windows](#starting-with-windows).
 - **Upgrades**: the MSI's `ProductVersion` tracks the exe version, so installing a newer build automatically removes the old one. The previous install location is remembered (via `HKLM\SOFTWARE\LanLink\InstallDir`), so upgrades reinstall to the same folder even if you originally chose a custom path. Before replacing files it tells any running LanLink to quit via the `--exit` IPC command and waits for it to release the executable.
 
-Bump `VERSION` at the top of `build-msi.bat` for each release — it flows into both the exe version and the MSI `ProductVersion`.
+Bump the `VERSION` file next to `build-msi.bat` for each release — it is the single source of truth and flows into the exe version, the MSI `ProductVersion`, the APK `versionName`/`versionCode`, and the GitHub release tag.
+
+### Releasing
+
+`release-github.bat` publishes a GitHub release tagged `v<version>` from the `VERSION` file, attaching the self-contained exe, the MSI, and (when it builds) the APK. It refuses to publish if that version was already released, so bump `VERSION` first.
 
 ### Command-line flags
 
@@ -59,6 +63,38 @@ Bump `VERSION` at the top of `build-msi.bat` for each release — it flows into 
 The startup appearance is normally driven by the **When LanLink starts** setting (Show window normally / Start minimized (taskbar) / Start minimized to tray); the flags above are how the Windows-startup entry passes that choice and override the setting for a single launch.
 
 LanLink is single-instance: launching it again brings the existing window forward and exits the new copy (a `--minimized`/`--minimized-taskbar` relaunch is ignored so autostart won't pop the window open at boot). It claims the network port exclusively, so if a stale copy is already running, a second launch surfaces that copy rather than starting a second, half-working instance.
+
+### Settings
+
+Open **⚙ Settings** from the bottom-right of the window, or **Settings…** on the tray icon's right-click menu (the tray route matters when LanLink starts hidden and there's no window to click). Available options:
+
+| Setting | Effect |
+|---|---|
+| Display name | How this device appears to other peers. |
+| Download folder | Where received files are saved. |
+| Port | TCP/UDP port (requires restart). |
+| When LanLink starts | Show window normally / Start minimized (taskbar) / Start minimized to tray. |
+| Start LanLink when Windows starts | Adds or removes the autostart entry. |
+| Accept connections from outside the LAN | Off by default; see [Remote connections](#remote-connections). |
+
+#### Starting with Windows
+
+Exactly one autostart entry exists, and only LanLink writes it: a per-user `HKCU\...\Run` value whose command-line flag matches the chosen start mode.
+
+That matters because Windows launches an app once per `Run` entry. If a machine-wide `HKLM` entry existed alongside the per-user one, each launch would carry its own mode flag and whichever instance won the single-instance race would decide how the app appears — so setup's mode could silently override the one picked in Settings, and turning autostart off would look like it did nothing. Removing an `HKLM` entry also needs administrator rights the app doesn't have.
+
+So the installer never writes a `Run` entry. Its autostart checkbox writes `HKLM\SOFTWARE\LanLink\AutostartRequest` = `<version>|<1 if ticked>`, and LanLink applies that on its first run after the install, creating or removing the per-user entry to match. The version stamp means each install's answer is applied exactly once: change the setting afterwards and it sticks, because the stamp hasn't changed.
+
+Installs from **1.0.3.0 and earlier** did create a machine-wide entry. Upgrading removes it. To check or clear one by hand, from an elevated prompt:
+
+```
+reg query  "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v LanLink
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v LanLink /f
+```
+
+Saving Settings also drops such a leftover entry when LanLink happens to be elevated, and warns in the log when it can't.
+
+Note that the checkbox reflects the *actual* registry state (either hive), not a saved flag, so it stays honest about an entry an old installer created.
 
 ### Android
 

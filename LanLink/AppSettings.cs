@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace LanLink;
 
@@ -36,10 +37,26 @@ public sealed class AppSettings
     public bool         AcceptExternalConnections { get; set; }
 
     /// <summary>
+    /// The installer autostart request (a version stamp) that has already been
+    /// applied — see <see cref="Autostart.ConsumeInstallerRequest"/>.  Empty
+    /// means "no install has asked yet".  Stored so setup's choice is honoured
+    /// exactly once and a later change in Settings isn't undone on every launch.
+    /// </summary>
+    public string       AutostartRequestHandled { get; set; } = "";
+
+    /// <summary>
     /// Legacy flag (pre-StartupMode).  Kept only so old settings files still
     /// deserialize; migrated to <see cref="StartupMode"/> on load.
     /// </summary>
     public bool         StartMinimized { get; set; }
+
+    /// <summary>
+    /// True when these settings came from an existing settings.json rather than
+    /// from defaults.  Lets first-run logic tell "the user has never configured
+    /// anything" from "the user chose the defaults".  Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool         ExistedOnDisk  { get; set; }
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -59,6 +76,7 @@ public sealed class AppSettings
                     if (s.StartMinimized && s.StartupMode == StartupMode.Normal)
                         s.StartupMode = StartupMode.Tray;
                     s.StartMinimized = false;
+                    s.ExistedOnDisk  = true;
                     return s;
                 }
             }

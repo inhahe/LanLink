@@ -79,11 +79,18 @@ public partial class App : Application
         };
         _listenerThread.Start();
 
+        // Apply setup's autostart choice, if this is the first run after an
+        // install that made one.  Done here (not in the installer) so the Run
+        // entry lands in the user's own hive and stays the only one — see
+        // Autostart for why two entries break the start-mode setting.
+        var settings = AppSettings.Load();
+        Autostart.ConsumeInstallerRequest(settings);
+
         // Decide how to appear.  The saved StartupMode is the default; a CLI
         // flag (used by the autostart registry entry) overrides it.  Honouring
         // the setting here means a manual launch also respects it, not just the
         // Windows-startup launch.
-        StartupMode mode = AppSettings.Load().StartupMode;
+        StartupMode mode = settings.StartupMode;
         if (wantTray)            mode = StartupMode.Tray;
         else if (wantMinTaskbar) mode = StartupMode.Minimized;
 

@@ -9,9 +9,6 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
 
-    private const string RegistryRunKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "LanLink";
-
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -21,10 +18,19 @@ public partial class SettingsWindow : Window
         FolderBox.Text = settings.DownloadFolder;
         PortBox.Text   = settings.Port.ToString();
         NodeIdBox.Text = settings.NodeId;
-        StartupCheck.IsChecked   = settings.RunOnStartup;
+        // Reflect what the registry actually says rather than the saved bool:
+        // an entry left by an older installer can turn autostart on without
+        // settings.json ever knowing, which would leave this checkbox lying.
+        StartupCheck.IsChecked   = Autostart.IsEnabled();
         StartModeCombo.SelectedIndex = (int)settings.StartupMode;   // Normal=0, Minimized=1, Tray=2
         ExternalCheck.IsChecked  = settings.AcceptExternalConnections;
     }
+
+    /// <summary>
+    /// Set when a machine-wide (HKLM) autostart entry survived because removing
+    /// it needs administrator rights.  The caller surfaces this to the user.
+    /// </summary>
+    public bool MachineWideAutostartRemains { get; private set; }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
     {
@@ -52,38 +58,12 @@ public partial class SettingsWindow : Window
         _settings.RunOnStartup = StartupCheck.IsChecked == true;
         _settings.StartupMode  = (StartupMode)Math.Max(0, StartModeCombo.SelectedIndex);
         _settings.AcceptExternalConnections = ExternalCheck.IsChecked == true;
-        ApplyStartupRegistry(_settings.RunOnStartup, _settings.StartupMode);
+        MachineWideAutostartRemains =
+            !Autostart.Apply(_settings.RunOnStartup, _settings.StartupMode);
 
         _settings.Save();
         DialogResult = true;
         Close();
-    }
-
-    private static void ApplyStartupRegistry(bool enable, StartupMode mode)
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(RegistryRunKey, writable: true);
-            if (key is null) return;
-
-            if (enable)
-            {
-                string exePath = Environment.ProcessPath
-                    ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LanLink.exe");
-                string flag = mode switch
-                {
-                    StartupMode.Tray      => " --minimized",
-                    StartupMode.Minimized => " --minimized-taskbar",
-                    _                     => ""
-                };
-                key.SetValue(AppName, $"\"{exePath}\"{flag}");
-            }
-            else
-            {
-                key.DeleteValue(AppName, throwOnMissingValue: false);
-            }
-        }
-        catch { /* non-critical — user can set manually */ }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)

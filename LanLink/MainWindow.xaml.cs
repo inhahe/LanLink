@@ -819,6 +819,14 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() == true)
         {
             AddLog("Settings saved (port changes require restart).");
+
+            if (dlg.MachineWideAutostartRemains)
+            {
+                AddLog("Note: a machine-wide startup entry set by the installer is " +
+                       "still present and needs administrator rights to remove. It " +
+                       "launches LanLink at logon with its own start mode, which can " +
+                       "override the mode chosen here.", LogLevel.Error);
+            }
         }
     }
 }

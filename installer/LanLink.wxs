@@ -121,16 +121,35 @@
                        Value="[INSTALLFOLDER]" KeyPath="yes" />
       </Component>
 
-      <!-- Registry Run entry — installed only when the user leaves the
-           autostart checkbox ticked.  Launches minimized to the tray. -->
-      <Component Id="AutostartEntry" Directory="INSTALLFOLDER"
-                 Guid="9F1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D"
-                 Condition="AUTOSTART = 1">
-        <RegistryValue Root="HKLM"
-                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-                       Name="LanLink"
-                       Type="string"
-                       Value="&quot;[INSTALLFOLDER]LanLink.exe&quot; --minimized" />
+      <!-- Autostart *request* — setup's answer to the autostart checkbox.
+
+           Deliberately not a Run entry.  Windows launches an app once per Run
+           entry, each carrying its own start-mode flag, so a machine-wide entry
+           here plus the per-user one LanLink manages meant two launches racing
+           to decide how the app appears: setup's mode could silently override
+           the one chosen in Settings, and turning autostart off looked like a
+           no-op.  Removing an HKLM entry also needs elevation the app doesn't
+           have.  So the per-user (HKCU) entry is the single source of truth and
+           only LanLink writes it.
+
+           The value is "<version>|<1 if ticked>": setup's answer, stamped with
+           the version so each install is applied exactly once.  On first run
+           LanLink compares it with the stamp it last handled, turns it into the
+           real HKCU entry (creating or removing it), and thereafter leaves the
+           user's choice alone.  Both answers are recorded — writing the value
+           unconditionally rather than only when ticked is what lets *unticking*
+           the box turn an existing autostart off.
+
+           It lives in HKLM because a per-machine MSI's execute sequence runs as
+           SYSTEM — an HKCU write would land in SYSTEM's hive, not the user's.
+
+           Note the component GUID differs from the pre-1.0.4.0 Run-entry
+           component's, so upgrading removes that stale machine-wide entry. -->
+      <Component Id="AutostartRequest" Directory="INSTALLFOLDER"
+                 Guid="2A7D9E44-1F63-4B58-8E0A-3C5D9B1746E2">
+        <RegistryValue Root="HKLM" Key="SOFTWARE\LanLink"
+                       Name="AutostartRequest" Type="string"
+                       Value="$(var.Version)|[AUTOSTART]" KeyPath="yes" />
       </Component>
 
     </ComponentGroup>

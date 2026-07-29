@@ -16,9 +16,9 @@
     <!-- Version metadata.  The build-msi.bat overrides these via -p:Version so
          the exe's version and the MSI ProductVersion stay in lockstep and
          Windows can tell a newer build from an older one during upgrade. -->
-    <Version>1.0.2.0</Version>
-    <FileVersion>1.0.2.0</FileVersion>
-    <AssemblyVersion>1.0.2.0</AssemblyVersion>
+    <Version>1.0.4.0</Version>
+    <FileVersion>1.0.4.0</FileVersion>
+    <AssemblyVersion>1.0.4.0</AssemblyVersion>
     <Company>LanLink</Company>
     <Product>LanLink</Product>
   </PropertyGroup>
