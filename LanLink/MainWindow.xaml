@@ -151,21 +151,25 @@
                                 Click="SendText_Click"/>
                     </Grid>
 
-                    <!-- File / folder / settings buttons -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="SendFileBtn" Content="Send File"
-                                Padding="12,5" IsEnabled="False"
-                                Click="SendFile_Click"/>
-                        <Button x:Name="SendFolderBtn" Content="Send Folder"
-                                Padding="12,5" Margin="8,0,0,0" IsEnabled="False"
-                                Click="SendFolder_Click"/>
+                    <!-- Send buttons (left) and Settings (far right).  Settings is
+                         pushed to the opposite edge so it reads as a separate,
+                         always-available action instead of a third "send" button
+                         sitting greyed-out next to the disabled ones. -->
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                            <Button x:Name="SendFileBtn" Content="Send File"
+                                    Padding="12,5" IsEnabled="False"
+                                    Click="SendFile_Click"/>
+                            <Button x:Name="SendFolderBtn" Content="Send Folder"
+                                    Padding="12,5" Margin="8,0,0,0" IsEnabled="False"
+                                    Click="SendFolder_Click"/>
+                        </StackPanel>
 
-                        <!-- spacer -->
-                        <Border Width="1"/>
-
-                        <Button Content="Settings" Padding="12,5"
-                                Margin="8,0,0,0" Click="Settings_Click"/>
-                    </StackPanel>
+                        <Button Content="&#x2699;  Settings" Padding="12,5"
+                                HorizontalAlignment="Right" FontWeight="SemiBold"
+                                ToolTip="Startup mode, run with Windows, downloads folder, port, external connections"
+                                Click="Settings_Click"/>
+                    </Grid>
                 </Grid>
 
                 <!-- Activity log -->

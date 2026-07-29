@@ -166,6 +166,10 @@ public partial class MainWindow : Window
     {
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Show LanLink", null, (_, _) => ShowFromTray());
+        // Reachable from the tray too: when LanLink starts minimized to tray the
+        // main window may never be shown, so this is the only way in to the
+        // options without first restoring the window.
+        menu.Items.Add("Settings\u2026", null, (_, _) => OpenSettings());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApp());
 
@@ -787,9 +791,31 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------ settings
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
+    private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
+
+    /// <summary>
+    /// Show the settings dialog.  Called both from the Settings button and from
+    /// the tray menu — the latter can fire while the main window has never been
+    /// shown (tray start mode), and WPF throws if you make an unshown window the
+    /// Owner of a dialog, so only set Owner when there's a live window to own it.
+    /// </summary>
+    private void OpenSettings()
     {
-        var dlg = new SettingsWindow(_settings) { Owner = this };
+        var dlg = new SettingsWindow(_settings);
+
+        if (IsVisible)
+        {
+            dlg.Owner = this;
+        }
+        else
+        {
+            // No visible parent — centre on screen and make sure the dialog is
+            // reachable in the alt-tab list rather than lost behind other apps.
+            dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            dlg.ShowInTaskbar = true;
+            dlg.Topmost       = true;
+        }
+
         if (dlg.ShowDialog() == true)
         {
             AddLog("Settings saved (port changes require restart).");

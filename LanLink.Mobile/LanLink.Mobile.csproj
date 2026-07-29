@@ -9,8 +9,8 @@
 
     <ApplicationTitle>LanLink</ApplicationTitle>
     <ApplicationId>com.lanlink.mobile</ApplicationId>
-    <ApplicationDisplayVersion>1.0.1.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1000100</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.2.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1000200</ApplicationVersion>
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
   </PropertyGroup>
 
