@@ -45,10 +45,15 @@ public sealed class DiscoveryService : IDisposable
         // Android drops broadcast/multicast packets unless a MulticastLock is held.
         var wifiManager = (WifiManager?)Android.App.Application.Context
             .GetSystemService(Context.WifiService);
-        if (wifiManager is not null)
+        // CreateMulticastLock is annotated nullable, and the null case is real:
+        // it returns null when the WiFi service is unavailable (WiFi hard-off on
+        // some OEM builds).  Discovery then simply runs without the lock rather
+        // than taking the app down on a NullReferenceException.
+        var multicastLock = wifiManager?.CreateMulticastLock("LanLink.Discovery");
+        if (multicastLock is not null)
         {
-            _multicastLock = wifiManager.CreateMulticastLock("LanLink.Discovery");
-            _multicastLock.Acquire();
+            multicastLock.Acquire();
+            _multicastLock = multicastLock;
         }
 #endif
 

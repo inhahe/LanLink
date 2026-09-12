@@ -6,8 +6,11 @@
              BackgroundColor="#F3F4F6">
 
     <ScrollView Padding="16">
-        <Frame Padding="20" CornerRadius="12"
-               BackgroundColor="White" BorderColor="#E5E7EB" HasShadow="False">
+        <Border Padding="20"
+                BackgroundColor="White"
+                Stroke="#E5E7EB"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 12">
             <VerticalStackLayout Spacing="16">
 
                 <Label Text="Settings" FontSize="22" FontAttributes="Bold"/>
@@ -62,6 +65,6 @@
                 </Grid>
 
             </VerticalStackLayout>
-        </Frame>
+        </Border>
     </ScrollView>
 </ContentPage>

@@ -19,7 +19,8 @@ both copies or the platforms stop interoperating.
 
 - Automatic peer discovery on the LAN (UDP broadcast, every 3 s, on every active
   interface's subnet broadcast address)
-- Text messages, single files, whole directories, with live progress
+- Text messages, single files, whole directories, with live progress — on
+  both platforms (mobile browses storage with its own file picker)
 - Remote connect: reach another instance over the internet by IP/host
 - LAN bridging: one remote link makes *both* LANs' peers mutually visible,
   messages relayed hop-by-hop
@@ -111,11 +112,135 @@ both copies or the platforms stop interoperating.
 - `MainPage` / `SettingsPage` mirror the desktop window and settings dialog.
 - `Platforms/Android/AndroidManifest.xml` declares the network/storage
   permissions; `MainActivity` acquires the WiFi `MulticastLock`.
+- **`LanLink.Mobile.csproj` must set `<AndroidManifest>` explicitly.** Left to
+  the default, `$(AndroidManifest)` evaluates to the *empty string* in this
+  project, and the .NET Android build then synthesises the manifest purely from
+  `[assembly: UsesPermission]` attributes — `Platforms/Android/AndroidManifest.xml`
+  is never read. It silently swallowed both storage permissions,
+  `usesCleartextTraffic` and the icon attributes while sitting there looking
+  authoritative; the `[assembly:]` attributes in `MainActivity.cs` are a partial
+  workaround for the same problem, covering only the four network permissions.
+  Symptom when it regresses: a permission is present in the XML, absent from
+  `adb shell dumpsys package com.lanlink.mobile`, and its toggle is greyed out in
+  Android's settings because the app never requested it. Assembly attributes are
+  merged *into* the file, so both sources work once it's wired up.
 - Download folder defaults to
   `/storage/emulated/0/Android/data/com.lanlink.mobile/files/LanLink/`.
 - Requires the `maui-android` workload **and SDK platform android-35**, which
   only exists in the per-user SDK at `%LOCALAPPDATA%\Android\Sdk` on this
   machine — `build-apk.bat` points the build at it.
+
+### The network outlives the page
+
+`MainPage` constructs `NetworkManager`/`TransferManager`, but **must not dispose
+them in `OnDisappearing`**. That event fires whenever the page stops being the
+visible one — pushing a modal (the file browser), navigating to Settings, the app
+being backgrounded, or the screen locking — and `OnAppearing` is guarded by
+`_started`, so nothing ever restarted it. The result was an app that looked
+healthy (the peer list still showed the last known state, so the send buttons
+stayed enabled) while holding no listener, no discovery and no connections: sends
+failed with *"No active connection to next-hop"* and nothing could reach the
+phone. A LAN sharing app also *wants* to keep listening while backgrounded.
+Teardown is therefore hooked to `Window.Destroying`.
+
+Related trap when reading a failure like that: a route can exist with **no
+connection behind it**. `OnLanPeerDiscovered` sets `_routes[node] = node` the
+moment a UDP announce arrives, long before (or entirely without) a TCP session,
+and `_routes` is never pruned for direct peers on disconnect. So
+`SendToAsync` finding a route proves nothing about reachability.
+
+### Send controls and the "nothing happens" trap
+
+The send controls are gated on peer selection: text needs a selected peer (it
+queues if the peer is offline), files and folders need a *connected* one.
+`UpdateSendControls()` is the single place that applies that, and it runs on
+selection change **and** whenever the selected peer's connection state moves
+(`RefreshIfSelected`).
+
+Two things about this are easy to get wrong, and both were live bugs:
+
+- **A disabled control must look disabled.** Setting `BackgroundColor` /
+  `TextColor` inline on a MAUI `Button` overrides Android's default disabled
+  rendering, so a dead button still painted itself vivid blue. The styles in
+  `App.xaml` (`PrimaryButton`, `AccentButton`, `SubtleButton`, `SendEntry`)
+  therefore declare `Normal` **and** `Disabled` visual states explicitly. Don't
+  set those colours inline on the control.
+- **A disabled control swallows the tap silently**, which reads as the app being
+  broken. `NoPeerBlocker` / `OfflineBlocker` are transparent tap-catchers layered
+  over the send panel that fire a toast explaining the gate instead, and pulse
+  the peer list. They are driven by the same `UpdateSendControls()`.
+
+Likewise the peer row's selection highlight comes from a `VisualStateManager` on
+the `SwipeView` — the `DataTemplate`'s **root** element, which is the only one
+`CollectionView` drives the `Selected` state on. The inner `Grid` must stay
+`Transparent`; hardcoding `White` there paints over the highlight and makes
+tapping a peer look like it did nothing.
+
+### Staying reachable in the background
+
+Android throttles a backgrounded app's networking: measured on an S21 (One UI 6 /
+Android 14), `PC -> phone:37656` succeeded in the foreground, failed on every
+attempt after HOME, and recovered immediately on return — while the listening
+socket was still open and the process alive. `LanLinkForegroundService` is the
+fix: a `dataSync` foreground service that gives the process foreground priority
+and holds a `WifiLock` (`FULL_HIGH_PERF`, because the modern `LOW_LATENCY` mode
+only applies while the app *is* foregrounded).
+
+**The service does not own the network.** `MainPage` still constructs and owns
+`NetworkManager`/`TransferManager`; the service only keeps the process alive
+around them. That is why it returns `NotSticky` — an Android-initiated restart
+would post a "reachable" notification with no network behind it. It is started
+from `StartNetwork()` only after the listener binds, and stopped from
+`Window.Destroying` alongside disposal. Moving network ownership into the service
+is the fuller fix and a larger refactor.
+
+`POST_NOTIFICATIONS` (13+) governs only whether the status notification is
+*visible*; the service runs regardless, so a refusal is never fatal — and for the
+same reason **the request must come after `StartNetwork()`, never before**.
+`Permissions.RequestAsync` does not return until the user answers the system
+dialog, so awaiting it first stalls `OnAppearing` indefinitely and the listener
+never binds: the app comes up with no sockets at all, looking identical to the
+`OnDisappearing` teardown bug above.
+
+### A CollectionView needs a bounded height
+
+Both `CollectionView`s on `MainPage` must sit in a **`Grid` row**, never directly
+in a `VerticalStackLayout`. A stack layout measures its children with infinite
+height, so the list sizes itself to its whole content, overflows its parent and
+gets clipped — it then scrolls by the few pixels of slack and no further. The
+activity log hit exactly this: every new entry, transfer progress included,
+landed below the fold and was unreachable, which read as "transfers report
+nothing". Bounding the height also restores
+`ItemsUpdatingScrollMode="KeepLastItemInView"`, which silently does nothing while
+the list is unbounded. The peer list escapes the bug only because it carries an
+explicit `HeightRequest`.
+
+### Browsing files to send
+
+`FileBrowserPage` is an in-app file/folder browser over real filesystem paths
+(storage roots → directories → multi-select files, or drill in and send a whole
+folder). `MainPage` offers it from **Send Files** and **Send Folder**, with
+**Pick from other apps** as an escape hatch to Android's own picker.
+
+It exists because Android's Storage Access Framework is a poor fit here twice
+over: it returns opaque `content://` URIs rather than paths, so
+`TransferManager.SendDirectoryAsync` — which walks a real directory tree — would
+need the whole folder copied into the cache first; and the picker only surfaces
+whichever `DocumentsProvider`s the OEM chooses to show, which on a Samsung device
+can be nothing but Google Drive. The SAF path is still there for files that
+genuinely aren't on the filesystem (Drive, other apps), routed through
+`EnsureLocalPathAsync`, which copies the stream to the cache before sending.
+
+The cost is `MANAGE_EXTERNAL_STORAGE` ("All files access"), gated by
+`StoragePermission` in `PlatformHelpers.cs`. It cannot be granted from a runtime
+prompt on Android 11+ — the user has to flip it in system Settings, so the
+helper can only explain and open that screen, and the caller backs off until they
+return. Android 10 and below take the ordinary `StorageRead` runtime prompt
+instead. Google Play restricts apps that declare this permission, which doesn't
+bind LanLink: it ships as a sideloaded APK from GitHub releases.
+
+`Toasts` (same file) wraps the platform toast, because MAUI has no built-in one
+and `CommunityToolkit.Maui` isn't worth a dependency for it.
 
 ## Build, versioning and release
 

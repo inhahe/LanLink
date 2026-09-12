@@ -126,9 +126,17 @@ public sealed class TransferManager
 
         string tid = NewTransferId();
 
+        // Walking a big tree takes real time, and until it finishes there is
+        // nothing at all on screen.  Claim the log line first so the user sees
+        // the transfer exists; later updates reuse the same entry.
+        ProgressUpdate?.Invoke(tid, $"Scanning {di.Name}…", false);
+
         var allFiles  = di.GetFiles("*", SearchOption.AllDirectories);
         long totalSize = allFiles.Sum(f => f.Length);
-        var tracker   = new ProgressTracker(tid, di.Name, totalSize);
+        var tracker   = new ProgressTracker(tid, di.Name, totalSize)
+        {
+            FileCount = allFiles.Length
+        };
 
         ProgressUpdate?.Invoke(tid,
             $"Sending {di.Name}  0%  ({allFiles.Length} files, {FormatSize(totalSize)})",
@@ -142,9 +150,18 @@ public sealed class TransferManager
             From       = _network.NodeId
         }).ConfigureAwait(false);
 
+        int index = 0;
         foreach (var fi in allFiles)
         {
             string rel = Path.GetRelativePath(dirPath, fi.FullName);
+
+            tracker.FileIndex   = ++index;
+            tracker.CurrentFile = rel;
+
+            // Zero-byte files stream no chunks, so they would never trigger a
+            // progress report; emit one here so a run of empty files can't look
+            // like a stall.
+            if (fi.Length == 0) EmitSendProgress(tracker);
 
             await _network.SendToAsync(targetId, new WireMessage
             {
@@ -214,10 +231,23 @@ public sealed class TransferManager
         var now = DateTime.UtcNow;
         if ((now - t.LastReport).TotalMilliseconds < 500) return;
         t.LastReport = now;
+        EmitSendProgress(t);
+    }
 
+    private void EmitSendProgress(ProgressTracker t)
+    {
         double pct = t.TotalBytes > 0 ? (double)t.BytesDone / t.TotalBytes * 100 : 0;
+
+        // For a directory, the overall percentage alone looks identical to a
+        // hung transfer for minutes at a time.  Naming the file currently on the
+        // wire, and its position in the set, is what makes it obviously alive.
+        string detail = t.FileCount > 1
+            ? $"  —  file {t.FileIndex}/{t.FileCount}: {t.CurrentFile}"
+            : "";
+
         ProgressUpdate?.Invoke(t.TransferId,
-            $"Sending {t.Label}  {pct:F0}%  ({FormatSize(t.BytesDone)} / {FormatSize(t.TotalBytes)})",
+            $"Sending {t.Label}  {pct:F0}%  "
+            + $"({FormatSize(t.BytesDone)} / {FormatSize(t.TotalBytes)}){detail}",
             false);
     }
 
@@ -399,6 +429,11 @@ internal sealed class ProgressTracker
     public readonly long   TotalBytes;
     public long     BytesDone;
     public DateTime LastReport;
+
+    /// <summary>Which file of a directory transfer is on the wire right now.</summary>
+    public string CurrentFile = "";
+    public int    FileIndex;
+    public int    FileCount;
 
     public ProgressTracker(string tid, string label, long totalBytes)
     {

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:LanLink"
+             x:Class="LanLink.FileBrowserPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#F3F4F6">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- ============ HEADER ============ -->
+        <Grid Grid.Row="0" BackgroundColor="#1E40AF"
+              Padding="12,12" ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0" Text="Cancel" Clicked="Cancel_Clicked"
+                    BackgroundColor="Transparent" TextColor="White"
+                    FontSize="14" Padding="0" BorderWidth="0"/>
+            <Label Grid.Column="1" x:Name="TitleLabel" Text="Select files"
+                   TextColor="White" FontSize="16" FontAttributes="Bold"
+                   HorizontalOptions="Center" VerticalOptions="Center"/>
+            <Button Grid.Column="2" x:Name="SelectAllBtn" Text="All"
+                    Clicked="SelectAll_Clicked"
+                    BackgroundColor="Transparent" TextColor="White"
+                    FontSize="14" Padding="0" BorderWidth="0"/>
+        </Grid>
+
+        <!-- ============ PATH BAR ============ -->
+        <Grid Grid.Row="1" BackgroundColor="White" Padding="10,8"
+              ColumnDefinitions="Auto,*" ColumnSpacing="10">
+            <Button Grid.Column="0" x:Name="UpBtn" Text="&#x2191;"
+                    Clicked="Up_Clicked" FontSize="16"
+                    WidthRequest="42" HeightRequest="34" Padding="0"
+                    Style="{StaticResource SubtleButton}"/>
+            <Label Grid.Column="1" x:Name="PathLabel" Text="Storage"
+                   FontSize="12" TextColor="#6B7280"
+                   VerticalOptions="Center" LineBreakMode="HeadTruncation"/>
+        </Grid>
+
+        <!-- ============ ENTRY LIST ============ -->
+        <CollectionView Grid.Row="2" x:Name="EntryList" Margin="0,1,0,0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:BrowserEntry">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,11"
+                          ColumnSpacing="12" BackgroundColor="White">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="Entry_Tapped"
+                                                  CommandParameter="{Binding .}"/>
+                        </Grid.GestureRecognizers>
+
+                        <Label Grid.Column="0" Text="{Binding Icon}"
+                               FontSize="19" VerticalOptions="Center"/>
+
+                        <VerticalStackLayout Grid.Column="1" Spacing="1"
+                                             VerticalOptions="Center">
+                            <Label Text="{Binding Name}" FontSize="14"
+                                   TextColor="#111827"
+                                   LineBreakMode="MiddleTruncation"/>
+                            <Label Text="{Binding Detail}" FontSize="11"
+                                   TextColor="#9CA3AF"/>
+                        </VerticalStackLayout>
+
+                        <Label Grid.Column="2" Text="{Binding Trailing}"
+                               FontSize="17" TextColor="#2563EB"
+                               FontAttributes="Bold" VerticalOptions="Center"/>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <Label x:Name="EmptyLabel" Text="This folder is empty"
+                       TextColor="#9CA3AF" FontSize="13"
+                       HorizontalTextAlignment="Center"
+                       HorizontalOptions="Center" Margin="24,40"/>
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <!-- ============ FOOTER ============ -->
+        <Grid Grid.Row="3" BackgroundColor="White" Padding="12"
+              ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Label Grid.Column="0" x:Name="StatusLabel" Text=""
+                   FontSize="12" TextColor="#6B7280"
+                   VerticalOptions="Center" LineBreakMode="TailTruncation"/>
+            <Button Grid.Column="1" x:Name="ConfirmBtn" Text="Send"
+                    Padding="18,0" IsEnabled="False"
+                    Style="{StaticResource PrimaryButton}"
+                    Clicked="Confirm_Clicked"/>
+        </Grid>
+    </Grid>
+</ContentPage>

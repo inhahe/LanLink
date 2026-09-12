@@ -22,9 +22,13 @@
           BackgroundColor="#F3F4F6">
 
         <!-- ============ ROW 0: PEER LIST ============ -->
-        <Frame Grid.Row="0" Padding="10" CornerRadius="10"
-               BackgroundColor="White" BorderColor="#E5E7EB"
-               HasShadow="False">
+        <Border x:Name="PeersFrame"
+               Grid.Row="0"
+               Padding="10"
+               BackgroundColor="White"
+               Stroke="#E5E7EB"
+               StrokeThickness="1"
+               StrokeShape="RoundRectangle 10">
             <VerticalStackLayout Spacing="6">
                 <Label Text="Peers" FontSize="15" FontAttributes="Bold"/>
 
@@ -34,7 +38,33 @@
                                 HeightRequest="120">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="local:Peer">
-                            <SwipeView>
+                            <!--
+                                The selection highlight lives on the SwipeView
+                                because that is the DataTemplate's root element,
+                                and CollectionView drives the Selected visual
+                                state on the root only.  The inner Grid must stay
+                                Transparent: hardcoding White there is what used
+                                to paint over the highlight, so tapping a peer
+                                looked like it did nothing at all.
+                            -->
+                            <SwipeView BackgroundColor="White">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroupList>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal">
+                                                <VisualState.Setters>
+                                                    <Setter Property="BackgroundColor" Value="White"/>
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                            <VisualState x:Name="Selected">
+                                                <VisualState.Setters>
+                                                    <Setter Property="BackgroundColor" Value="#DBEAFE"/>
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateGroupList>
+                                </VisualStateManager.VisualStateGroups>
+
                                 <SwipeView.RightItems>
                                     <SwipeItems>
                                         <SwipeItem Text="Remove"
@@ -46,7 +76,7 @@
                                 </SwipeView.RightItems>
 
                                 <Grid ColumnDefinitions="Auto,*,Auto" Padding="4,6" ColumnSpacing="8"
-                                      BackgroundColor="White">
+                                      BackgroundColor="Transparent">
                                     <Ellipse Grid.Column="0" WidthRequest="10" HeightRequest="10"
                                              VerticalOptions="Center"
                                              Fill="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"/>
@@ -70,7 +100,7 @@
                     </CollectionView.EmptyView>
                 </CollectionView>
             </VerticalStackLayout>
-        </Frame>
+        </Border>
 
         <!-- ============ ROW 1: CONNECT REMOTE ============ -->
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -79,17 +109,28 @@
                    ReturnCommand="{x:Null}" Completed="RemoteEntry_Completed"/>
             <Button Grid.Column="1" Text="Connect" FontSize="13"
                     Padding="14,0" Clicked="ConnectRemote_Clicked"
-                    BackgroundColor="#2563EB" TextColor="White"
-                    CornerRadius="6"/>
+                    Style="{StaticResource PrimaryButton}"/>
         </Grid>
 
         <!-- ============ ROW 2: ACTIVITY LOG ============ -->
-        <Frame Grid.Row="2" Padding="10" CornerRadius="10"
-               BackgroundColor="White" BorderColor="#E5E7EB"
-               HasShadow="False">
-            <VerticalStackLayout Spacing="4">
-                <Label Text="Activity" FontSize="15" FontAttributes="Bold"/>
-                <CollectionView x:Name="ActivityLogView"
+        <Border Grid.Row="2"
+               Padding="10"
+               BackgroundColor="White"
+               Stroke="#E5E7EB"
+               StrokeThickness="1"
+               StrokeShape="RoundRectangle 10">
+            <!--
+                Grid, NOT VerticalStackLayout.  A stack layout measures its
+                children with infinite height, so the CollectionView sized itself
+                to its entire content, overflowed the Border and was clipped: it
+                scrolled by the few pixels of slack and no further, hiding every
+                new entry (including transfer progress) below the fold.  Giving it
+                a `*` row bounds its height so it scrolls internally, which is
+                also what makes ItemsUpdatingScrollMode="KeepLastItemInView" work.
+            -->
+            <Grid RowDefinitions="Auto,*" RowSpacing="4">
+                <Label Grid.Row="0" Text="Activity" FontSize="15" FontAttributes="Bold"/>
+                <CollectionView Grid.Row="1" x:Name="ActivityLogView"
                                 ItemsUpdatingScrollMode="KeepLastItemInView">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="local:LogEntry">
@@ -108,34 +149,75 @@
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
-            </VerticalStackLayout>
-        </Frame>
+            </Grid>
+        </Border>
 
         <!-- ============ ROW 3: SEND CONTROLS ============ -->
-        <Frame Grid.Row="3" Padding="10" CornerRadius="10"
-               BackgroundColor="White" BorderColor="#E5E7EB"
-               HasShadow="False">
+        <Border Grid.Row="3"
+               Padding="10"
+               BackgroundColor="White"
+               Stroke="#E5E7EB"
+               StrokeThickness="1"
+               StrokeShape="RoundRectangle 10">
             <VerticalStackLayout Spacing="8">
-                <Label x:Name="SendToLabel" Text="Select a peer"
-                       FontSize="12" TextColor="#6B7280"/>
 
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <Entry x:Name="MessageEntry" Placeholder="Message..."
-                           FontSize="14" IsEnabled="False"
-                           ReturnCommand="{x:Null}" Completed="MessageEntry_Completed"/>
-                    <Button x:Name="SendTextBtn" Grid.Column="1"
-                            Text="Send" FontSize="14" Padding="16,0"
-                            IsEnabled="False" Clicked="SendText_Clicked"
-                            BackgroundColor="#2563EB" TextColor="White"
-                            CornerRadius="6"/>
+                <!-- Stays outside the blocker so the instruction is never washed out. -->
+                <Label x:Name="SendToLabel" Text="Select a peer above to send to"
+                       FontSize="14" FontAttributes="Bold" TextColor="#B45309"/>
+
+                <Grid>
+                    <VerticalStackLayout Spacing="8">
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Entry x:Name="MessageEntry" Placeholder="Message..."
+                                   IsEnabled="False"
+                                   Style="{StaticResource SendEntry}"
+                                   ReturnCommand="{x:Null}" Completed="MessageEntry_Completed"/>
+                            <Button x:Name="SendTextBtn" Grid.Column="1"
+                                    Text="Send" Padding="16,0" IsEnabled="False"
+                                    Clicked="SendText_Clicked"
+                                    Style="{StaticResource PrimaryButton}"/>
+                        </Grid>
+
+                        <!-- File/folder sending needs a live connection, so it has
+                             its own blocker for the "peer selected but offline" case. -->
+                        <Grid>
+                            <VerticalStackLayout Spacing="8">
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <Button x:Name="SendFilesBtn" Text="Send Files"
+                                            IsEnabled="False" Clicked="SendFiles_Clicked"
+                                            Style="{StaticResource AccentButton}"/>
+                                    <Button x:Name="SendFolderBtn" Grid.Column="1"
+                                            Text="Send Folder"
+                                            IsEnabled="False" Clicked="SendFolder_Clicked"
+                                            Style="{StaticResource AccentButton}"/>
+                                </Grid>
+                                <Button x:Name="SendViaAppsBtn"
+                                        Text="Pick from other apps (Drive, etc.)"
+                                        IsEnabled="False" Clicked="SendViaApps_Clicked"
+                                        Style="{StaticResource SubtleButton}"/>
+                            </VerticalStackLayout>
+
+                            <Grid x:Name="OfflineBlocker" BackgroundColor="#59FFFFFF"
+                                  IsVisible="False">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OfflineBlocker_Tapped"/>
+                                </Grid.GestureRecognizers>
+                            </Grid>
+                        </Grid>
+
+                    </VerticalStackLayout>
+
+                    <!-- Transparent controls swallow taps silently, which is exactly
+                         how "I tapped the text field and nothing happened" happens.
+                         This catches the tap and explains instead. -->
+                    <Grid x:Name="NoPeerBlocker" BackgroundColor="#59FFFFFF">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="NoPeerBlocker_Tapped"/>
+                        </Grid.GestureRecognizers>
+                    </Grid>
                 </Grid>
-
-                <Button x:Name="SendFilesBtn" Text="Send Files"
-                        FontSize="14" IsEnabled="False"
-                        Clicked="SendFiles_Clicked"
-                        BackgroundColor="#7C3AED" TextColor="White"
-                        CornerRadius="6"/>
             </VerticalStackLayout>
-        </Frame>
+        </Border>
     </Grid>
 </ContentPage>

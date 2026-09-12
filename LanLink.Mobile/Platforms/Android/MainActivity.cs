@@ -11,7 +11,15 @@ using Android.OS;
 
 namespace LanLink;
 
+// LaunchMode.SingleTop is load-bearing, not decoration.  Without it, launching
+// the app while it is already running (tapping the icon after backgrounding it,
+// or an `am start`) creates a *second* MainActivity; MAUI's single Window is
+// already bound to the first, so CreatePlatformWindow throws
+// InvalidOperationException and the process dies -- taking any in-flight
+// transfer and the whole activity log with it.  The stock MAUI template sets
+// this; this project had dropped it.
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true,
+    LaunchMode = LaunchMode.SingleTop,
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation |
                            ConfigChanges.UiMode | ConfigChanges.ScreenLayout |
                            ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]

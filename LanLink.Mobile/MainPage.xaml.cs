@@ -36,6 +36,7 @@ public partial class MainPage : ContentPage
 
         WireEvents();
         LoadPersistedState();
+        UpdateSendControls();
     }
 
     // ------------------------------------------------------------------ startup
@@ -48,10 +49,37 @@ public partial class MainPage : ContentPage
         if (_started) return;
         _started = true;
 
+        // The network outlives this page, so tie teardown to the window closing
+        // rather than to the page disappearing.  See OnDisappearing below.
+        if (Window is not null && !_disposeHooked)
+        {
+            _disposeHooked = true;
+            Window.Destroying += (_, _) =>
+            {
+                BackgroundKeepAlive.Stop();
+                _network.Dispose();
+            };
+        }
+
         // Give Android a moment to finish initialising the network stack.
         await Task.Delay(500);
         StartNetwork();
+
+        // Ask for notification permission *after* the network is up, never
+        // before.  RequestAsync does not return until the user answers the system
+        // dialog, so awaiting it first stalled OnAppearing indefinitely and the
+        // listener never bound at all — the app sat there with no sockets.  The
+        // permission only governs whether the service's notification is
+        // *visible*; the service runs either way, so nothing here is worth
+        // delaying startup for.
+        try
+        {
+            await BackgroundKeepAlive.RequestNotificationPermissionAsync();
+        }
+        catch { /* the indicator is cosmetic; never let it surface as a failure */ }
     }
+
+    private bool _disposeHooked;
 
     private void StartNetwork()
     {
@@ -60,9 +88,14 @@ public partial class MainPage : ContentPage
         try
         {
             _network.Start();
+
+            // Only once the listener is actually up — a "sharing" notification
+            // over a network that failed to start would be a lie.
+            BackgroundKeepAlive.Start();
+
             AddLog($"LanLink started as \"{_settings.DisplayName}\" (port {_settings.Port})");
             AddLog($"Downloads: {_settings.DownloadFolder}");
-            PeerEmptyLabel.Text = "Searching for peers on LAN\u2026";
+            PeerEmptyLabel.Text = "Searching for peers on LAN…";
         }
         catch (Exception ex)
         {
@@ -75,7 +108,20 @@ public partial class MainPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        _network.Dispose();
+
+        // Deliberately does NOT dispose the network.
+        //
+        // OnDisappearing fires whenever this page stops being the visible one:
+        // pushing a modal (the file browser), navigating to Settings, the app
+        // going to the background, or the screen simply locking.  Disposing here
+        // tore down the listener, discovery and every connection — and because
+        // OnAppearing is guarded by _started, nothing ever brought it back.  The
+        // app looked fine (the peer list still showed the last known state) but
+        // had no sockets, so sends failed with "No active connection to
+        // next-hop" and no peer could reach us.
+        //
+        // A LAN sharing app also *wants* to keep listening while backgrounded,
+        // so the network's lifetime belongs to the window, not the page.
     }
 
     // ------------------------------------------------------------------ persisted state
@@ -104,7 +150,7 @@ public partial class MainPage : ContentPage
             {
                 Time     = sm.Time,
                 Level    = level,
-                Text     = sm.IsSent ? $"You \u2192 {sm.PeerName}: {sm.Text}"
+                Text     = sm.IsSent ? $"You → {sm.PeerName}: {sm.Text}"
                                      : $"{sm.PeerName}: {sm.Text}",
                 Delivery = sm.IsSent ? DeliveryStatus.Delivered : DeliveryStatus.None
             };
@@ -118,7 +164,7 @@ public partial class MainPage : ContentPage
             {
                 Time      = pm.Time,
                 Level     = LogLevel.TextSent,
-                Text      = $"You \u2192 {pm.TargetName}: {pm.Text}",
+                Text      = $"You → {pm.TargetName}: {pm.Text}",
                 Delivery  = DeliveryStatus.Pending,
                 PendingId = pm.Id
             };
@@ -162,6 +208,7 @@ public partial class MainPage : ContentPage
                 }
 
                 PersistPeer(peer);
+                RefreshIfSelected(peer.NodeId);
 
                 // Flush pending messages if this peer just connected.
                 if (peer.IsConnected)
@@ -184,6 +231,7 @@ public partial class MainPage : ContentPage
                 }
 
                 PersistPeer(peer);
+                RefreshIfSelected(peer.NodeId);
 
                 // Flush pending messages on reconnect.
                 if (peer.IsConnected)
@@ -197,6 +245,8 @@ public partial class MainPage : ContentPage
                 var p = _peers.FirstOrDefault(x => x.NodeId == nodeId);
                 if (p is not null)
                     p.IsConnected = false;
+
+                RefreshIfSelected(nodeId);
             });
 
         _network.Log  += msg => AddLog(msg);
@@ -220,6 +270,17 @@ public partial class MainPage : ContentPage
             });
             _store.Save();
         };
+    }
+
+    /// <summary>
+    /// Keep the send controls honest when the *selected* peer's connection state
+    /// changes underneath us.  Without this, selecting an offline peer that later
+    /// connects left the file buttons greyed out until you re-tapped the peer.
+    /// </summary>
+    private void RefreshIfSelected(string nodeId)
+    {
+        if (_selectedPeer is not null && _selectedPeer.NodeId == nodeId)
+            UpdateSendControls();
     }
 
     // ------------------------------------------------------------------ pending message flush
@@ -333,15 +394,58 @@ public partial class MainPage : ContentPage
         MessageEntry.IsEnabled = hasPeer;
         SendTextBtn.IsEnabled  = hasPeer;
 
-        // Files require an active connection.
-        SendFilesBtn.IsEnabled = isOnline;
+        // Files and folders require an active connection.
+        SendFilesBtn.IsEnabled   = isOnline;
+        SendFolderBtn.IsEnabled  = isOnline;
+        SendViaAppsBtn.IsEnabled = isOnline;
+
+        // Tap-catchers: a disabled control eats the touch without a sound, so
+        // these sit on top and explain why nothing is happening.
+        NoPeerBlocker.IsVisible  = !hasPeer;
+        OfflineBlocker.IsVisible = hasPeer && !isOnline;
 
         if (!hasPeer)
-            SendToLabel.Text = "Select a peer";
+        {
+            SendToLabel.Text      = "Select a peer above to send to";
+            SendToLabel.TextColor = Color.FromArgb("#B45309");
+        }
         else if (isOnline)
-            SendToLabel.Text = $"Send to {_selectedPeer!.Name}:";
+        {
+            SendToLabel.Text      = $"→ Sending to {_selectedPeer!.Name}";
+            SendToLabel.TextColor = Color.FromArgb("#15803D");
+        }
         else
-            SendToLabel.Text = $"Send to {_selectedPeer!.Name} (offline \u2014 messages will queue):";
+        {
+            SendToLabel.Text      = $"→ Sending to {_selectedPeer!.Name}  "
+                                  + "(offline — text will queue, files can't be sent)";
+            SendToLabel.TextColor = Color.FromArgb("#B45309");
+        }
+    }
+
+    // ------------------------------------------------------------------ blocked-tap feedback
+
+    private async void NoPeerBlocker_Tapped(object? sender, TappedEventArgs e)
+    {
+        Toasts.Show("Pick who you're sending to — tap a peer in the list above.");
+        await FlashPeersAsync();
+    }
+
+    private void OfflineBlocker_Tapped(object? sender, TappedEventArgs e)
+    {
+        string name = _selectedPeer?.Name ?? "That peer";
+        Toasts.Show($"{name} is offline. Files need a live connection — "
+                  + "text messages will queue until it's back.");
+    }
+
+    /// <summary>Pulses the peer list so the eye is dragged to where the fix is.</summary>
+    private async Task FlashPeersAsync()
+    {
+        try
+        {
+            await PeersFrame.FadeTo(0.35, 110);
+            await PeersFrame.FadeTo(1.0, 110);
+        }
+        catch { /* animation cancelled by navigation */ }
     }
 
     // ------------------------------------------------------------------ remove peer (swipe)
@@ -419,7 +523,7 @@ public partial class MainPage : ContentPage
             try
             {
                 await _transfer.SendTextAsync(_selectedPeer.NodeId, text);
-                AddLog($"You \u2192 {_selectedPeer.Name}: {text}", LogLevel.TextSent,
+                AddLog($"You → {_selectedPeer.Name}: {text}", LogLevel.TextSent,
                        DeliveryStatus.Delivered);
 
                 _store.AddMessage(new SavedMessage
@@ -451,18 +555,131 @@ public partial class MainPage : ContentPage
             _store.AddPending(pm);
             _store.Save();
 
-            var entry = AddLog($"You \u2192 {_selectedPeer.Name}: {text}", LogLevel.TextSent,
+            var entry = AddLog($"You → {_selectedPeer.Name}: {text}", LogLevel.TextSent,
                                DeliveryStatus.Pending);
             entry.PendingId = pm.Id;
             _pendingEntries[pm.Id] = entry;
         }
     }
 
-    // ------------------------------------------------------------------ send files
+    // ------------------------------------------------------------------ send files / folders
 
     private async void SendFiles_Clicked(object? sender, EventArgs e)
     {
-        if (_selectedPeer is null) return;
+        if (!HasOnlinePeer()) return;
+        if (!await EnsureBrowseAccessAsync()) return;
+
+        var paths = await FileBrowserPage.PickAsync(this, BrowserMode.Files);
+        if (paths is null || paths.Count == 0) return;
+
+        await SendPathsAsync(paths);
+    }
+
+    private async void SendFolder_Clicked(object? sender, EventArgs e)
+    {
+        if (!HasOnlinePeer()) return;
+        if (!await EnsureBrowseAccessAsync()) return;
+
+        var paths = await FileBrowserPage.PickAsync(this, BrowserMode.Folder);
+        if (paths is null || paths.Count == 0) return;
+
+        await SendPathsAsync(paths);
+    }
+
+    /// <summary>
+    /// The escape hatch: Android's own picker, for content that isn't on the
+    /// filesystem at all (Drive, other apps' private storage).  Files only —
+    /// SAF hands back opaque content:// URIs, and a folder picked that way would
+    /// have to be copied into the cache wholesale before it could be sent.
+    /// </summary>
+    private async void SendViaApps_Clicked(object? sender, EventArgs e)
+    {
+        if (!HasOnlinePeer()) return;
+        await PickViaSystemPickerAsync();
+    }
+
+    private bool HasOnlinePeer()
+    {
+        if (_selectedPeer is null)
+        {
+            Toasts.Show("Pick who you're sending to — tap a peer in the list above.");
+            return false;
+        }
+
+        if (!_selectedPeer.IsConnected)
+        {
+            Toasts.Show($"{_selectedPeer.Name} is offline — files need a live connection.");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Confirms we can enumerate storage, and offers the system picker as a way
+    /// out when the user would rather not grant all-files access.
+    /// </summary>
+    private async Task<bool> EnsureBrowseAccessAsync()
+    {
+        if (await StoragePermission.HasAccessAsync()) return true;
+
+        // Android 10 and below: an ordinary runtime prompt is enough.
+        if (await StoragePermission.TryRequestLegacyAsync()) return true;
+
+        const string openSettings = "Open Settings";
+        const string useSystem    = "Use the system picker instead";
+
+        string choice = await DisplayActionSheet(
+            "To browse this phone's files and folders, Android needs you to turn on "
+            + "\"All files access\" for LanLink.",
+            "Cancel", null, openSettings, useSystem);
+
+        if (choice == openSettings)
+        {
+            StoragePermission.OpenAllFilesAccessSettings();
+            AddLog("Turn on \"Allow access to manage all files\", then come back and "
+                 + "tap Send Files again.");
+        }
+        else if (choice == useSystem)
+        {
+            await PickViaSystemPickerAsync();
+        }
+
+        return false;
+    }
+
+    private async Task SendPathsAsync(IEnumerable<string> paths)
+    {
+        var peer = _selectedPeer;
+        if (peer is null) return;
+
+        foreach (string path in paths)
+        {
+            bool   isDir = Directory.Exists(path);
+            string label = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+
+            // Immediate feedback so the user always sees *something* happen after
+            // picking — even before the transfer's own progress lines.
+            AddLog($"Sending {(isDir ? "folder " : "")}{label} to {peer.Name}…",
+                   LogLevel.Transfer);
+            try
+            {
+                if (isDir)
+                    await _transfer.SendDirectoryAsync(peer.NodeId, path);
+                else
+                    await _transfer.SendFileAsync(peer.NodeId, path);
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Failed to send {label}: {ex.Message}", LogLevel.Error);
+            }
+        }
+    }
+
+    private async Task PickViaSystemPickerAsync()
+    {
+        var peer = _selectedPeer;
+        if (peer is null) return;
 
         try
         {
@@ -476,17 +693,14 @@ public partial class MainPage : ContentPage
 
             foreach (var file in results)
             {
-                // Immediate feedback so the user always sees *something* happen
-                // after picking — even before the transfer's own progress lines.
-                AddLog($"Sending {file.FileName} to {_selectedPeer.Name}\u2026",
-                       LogLevel.Transfer);
+                AddLog($"Sending {file.FileName} to {peer.Name}…", LogLevel.Transfer);
                 try
                 {
                     // On Android the picked file's FullPath is often a content
                     // URI that isn't a real filesystem path, so copy the stream
                     // to a local cache file first and send that.
                     string path = await EnsureLocalPathAsync(file);
-                    await _transfer.SendFileAsync(_selectedPeer.NodeId, path);
+                    await _transfer.SendFileAsync(peer.NodeId, path);
                 }
                 catch (Exception ex)
                 {
@@ -556,7 +770,7 @@ public partial class MainPage : ContentPage
             host = addr;
         }
 
-        AddLog($"Connecting to {host}:{port}\u2026");
+        AddLog($"Connecting to {host}:{port}…");
         bool ok = await _network.ConnectToAsync(host, port);
         if (ok)
             RemoteEntry.Text = "";
@@ -626,4 +840,3 @@ public class ConnectedToTextColorConverter : IValueConverter
         System.Globalization.CultureInfo culture)
         => throw new NotImplementedException();
 }
-

@@ -23,6 +23,9 @@ public sealed class NetworkManager : IDisposable
     private readonly DiscoveryService _discovery;
     private readonly CancellationTokenSource _cts = new();
 
+    /// <summary>How long an accepted connection may stay silent before we drop it.</summary>
+    private const int HandshakeTimeoutMs = 15_000;
+
     private TcpListener? _listener;
 
     // Active TCP connections keyed by remote node-id.
@@ -140,6 +143,7 @@ public sealed class NetworkManager : IDisposable
                 WireUpConnection(conn);
                 conn.StartReading();
                 await SendHelloAsync(conn).ConfigureAwait(false);
+                _ = CloseIfNoHelloAsync(conn);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { Log?.Invoke($"Accept error: {ex.Message}"); }
@@ -228,6 +232,27 @@ public sealed class NetworkManager : IDisposable
     /// for the OS default (~2 h).  Without this a rebooted peer's stale entry
     /// would block it from reconnecting.
     /// </summary>
+    /// <summary>
+    /// Drop a connection that never identifies itself.  An accepted socket that
+    /// never sends hello would otherwise sit in ESTABLISHED indefinitely holding
+    /// a PeerConnection and a descriptor — a port scanner, or anything that
+    /// connects and waits, could accumulate them without limit.
+    /// </summary>
+    private async Task CloseIfNoHelloAsync(PeerConnection conn)
+    {
+        try
+        {
+            await Task.Delay(HandshakeTimeoutMs, _cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { return; }
+
+        if (conn.RemoteNodeId is null)
+        {
+            Log?.Invoke($"Dropping unidentified connection from {conn.RemoteEndpoint} (no hello)");
+            conn.Dispose();
+        }
+    }
+
     private static void ConfigureKeepAlive(TcpClient client)
     {
         try

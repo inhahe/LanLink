@@ -6,7 +6,8 @@ Cross-platform file and text sharing between computers and phones on the same LA
 
 - **Auto-discovery**: all instances on the same LAN find each other automatically (UDP broadcast)
 - **Text messaging**: send text instantly between devices
-- **File transfer**: send single files or entire directories with live progress
+- **File transfer**: send single files or entire directories with live progress, from desktop or phone
+- **Built-in file browser** (Android): pick files and folders straight off the phone's storage, instead of fighting Android's system picker
 - **Remote connect**: connect to any instance over the internet by entering its IP/domain
 - **LAN bridging**: if *any* device on your LAN connects to a remote device, all LAN devices can see and send to all devices on the remote's LAN — multi-hop relay with loop detection
 - **Auto-accept**: received files save to a configurable download folder
@@ -111,6 +112,45 @@ dotnet publish LanLink.Mobile/LanLink.Mobile.csproj -c Release -f net9.0-android
 The APK is at `LanLink.Mobile/bin/Release/net9.0-android/publish/com.lanlink.mobile-Signed.apk`. Sideload it via ADB or copy to your phone.
 
 A convenience script is included: run `build-apk.bat`.
+
+## Staying reachable on Android
+
+While LanLink is open it shows an ongoing **"Reachable by your other devices"**
+notification. That is a foreground service, and it is what lets other devices
+still reach the phone once you switch away from the app — Android otherwise
+throttles a backgrounded app's networking, so inbound connections silently fail
+even though the app is still running. It also keeps the WiFi radio out of
+power-save so the phone answers with the screen off.
+
+Closing LanLink stops the service and the notification. Sending *from* the phone
+never needed it; this only affects other devices reaching *in*.
+
+If inbound still fails after backgrounding, check Android **Settings → Apps →
+LanLink → Battery** and set it to **Unrestricted** — Samsung's power management
+can sleep the app regardless.
+
+## Sending files from Android
+
+Tap a peer in the list first — the row highlights and the send panel switches
+from *"Select a peer above to send to"* to *"Sending to &lt;name&gt;"*. Until then the
+message box and the send buttons are greyed out, and tapping them explains why.
+
+Three ways to choose what to send:
+
+| Button | What it does |
+|---|---|
+| **Send Files** | Built-in browser: storage roots, then folders, then tap files to tick them. |
+| **Send Folder** | Same browser; open a folder and send the whole tree. |
+| **Pick from other apps** | Android's own picker, for things not on the filesystem (Google Drive, other apps). Files only. |
+
+The first two need Android's **All files access** permission, because scoped
+storage otherwise forbids an app from listing shared storage at all. LanLink
+asks the first time and offers to open the settings screen — turn on *"Allow
+access to manage all files"*, press Back, and tap the button again. If you'd
+rather not grant it, **Pick from other apps** works without it.
+
+> Google Play restricts apps that request this permission. That doesn't affect
+> LanLink, which is distributed as a sideloaded APK from GitHub releases.
 
 ## How it works
 

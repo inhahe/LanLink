@@ -23,6 +23,9 @@ public sealed class NetworkManager : IDisposable
     private readonly DiscoveryService _discovery;
     private readonly CancellationTokenSource _cts = new();
 
+    /// <summary>How long an accepted connection may stay silent before we drop it.</summary>
+    private const int HandshakeTimeoutMs = 15_000;
+
     private TcpListener? _listener;
 
     // Active TCP connections keyed by remote node-id.
@@ -125,13 +128,54 @@ public sealed class NetworkManager : IDisposable
                     continue;
                 }
 
+                ConfigureKeepAlive(client);
                 var conn = new PeerConnection(client, isOutgoing: false);
                 WireUpConnection(conn);
                 conn.StartReading();
                 await SendHelloAsync(conn).ConfigureAwait(false);
+                _ = CloseIfNoHelloAsync(conn);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { Log?.Invoke($"Accept error: {ex.Message}"); }
+        }
+    }
+
+    /// <summary>
+    /// Turn on TCP keepalive so a peer that vanishes without a FIN (phone leaves
+    /// WiFi, machine sleeps) is detected in ~30 s instead of never.  Best-effort:
+    /// not every platform honours every option.  Mirrors the desktop copy.
+    /// </summary>
+    private static void ConfigureKeepAlive(TcpClient client)
+    {
+        try
+        {
+            var s = client.Client;
+            s.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime,      15);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval,   5);
+            s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount,  3);
+        }
+        catch { /* platform may not support all options — keepalive is best-effort */ }
+    }
+
+    /// <summary>
+    /// Drop a connection that never identifies itself.  An accepted socket that
+    /// never sends hello would otherwise sit in ESTABLISHED indefinitely holding
+    /// a PeerConnection and a descriptor — a port scanner, or anything that
+    /// connects and waits, could accumulate them without limit.
+    /// </summary>
+    private async Task CloseIfNoHelloAsync(PeerConnection conn)
+    {
+        try
+        {
+            await Task.Delay(HandshakeTimeoutMs, _cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { return; }
+
+        if (conn.RemoteNodeId is null)
+        {
+            Log?.Invoke($"Dropping unidentified connection from {conn.RemoteEndpoint} (no hello)");
+            conn.Dispose();
         }
     }
 
@@ -145,6 +189,7 @@ public sealed class NetworkManager : IDisposable
         {
             var client = new TcpClient();
             await client.ConnectAsync(host, port).ConfigureAwait(false);
+            ConfigureKeepAlive(client);
             var conn = new PeerConnection(client, isOutgoing: true);
             WireUpConnection(conn);
             conn.StartReading();
@@ -265,16 +310,34 @@ public sealed class NetworkManager : IDisposable
     {
         if (msg.NodeId is null || msg.Name is null) return;
 
-        // Deduplicate: first connection wins.
-        if (_connections.ContainsKey(msg.NodeId))
-        {
-            conn.Dispose();
-            return;
-        }
-
         conn.RemoteNodeId = msg.NodeId;
         conn.RemoteName   = msg.Name;
-        _connections[msg.NodeId] = conn;
+
+        // A fresh hello from a node we already hold a connection for means the
+        // peer reconnected — the existing entry is almost always stale (peer
+        // rebooted, or the link dropped and we never saw a FIN).  Replace it
+        // rather than rejecting the newcomer.
+        //
+        // This copy used to do the opposite ("first connection wins", disposing
+        // the new socket).  Desktop has always replaced, which is what design.md
+        // documents, and the mismatch meant that when both sides dialled at once
+        // the two ends kept *different* sockets: desktop switched to the second
+        // connection and disposed the first, mobile had already thrown the second
+        // away, so mobile was left with nothing and reported "No active
+        // connection to next-hop".
+        //
+        // Ordering matters: install the new connection in the slot *before*
+        // disposing the old one, so a concurrent lookup never sees an empty slot.
+        if (_connections.TryGetValue(msg.NodeId, out var existing)
+            && !ReferenceEquals(existing, conn))
+        {
+            _connections[msg.NodeId] = conn;
+            try { existing.Dispose(); } catch { }
+        }
+        else
+        {
+            _connections[msg.NodeId] = conn;
+        }
 
         var created = new Peer { NodeId = msg.NodeId };
         bool isNew  = _peers.TryAdd(msg.NodeId, created);
@@ -417,7 +480,15 @@ public sealed class NetworkManager : IDisposable
         }
         if (!_connections.TryGetValue(nextHop, out var conn))
         {
-            Log?.Invoke($"No active connection to next-hop {nextHop}");
+            // A route can exist with no connection behind it: LAN discovery adds
+            // _routes[node] = node the moment a UDP announce arrives, well before
+            // (or entirely without) a TCP session.  Name the peer rather than
+            // echoing a raw node id, which told the user nothing.
+            string who = _peers.TryGetValue(targetNodeId, out var tp) ? tp.Name : targetNodeId;
+            string via = nextHop == targetNodeId
+                ? ""
+                : $" via {(_peers.TryGetValue(nextHop, out var hp) ? hp.Name : nextHop)}";
+            Log?.Invoke($"Not connected to {who}{via} — nothing was sent.");
             return;
         }
 

@@ -2,4 +2,128 @@
 <Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="LanLink.App">
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- ================================================================
+                 Button / entry styles.
+
+                 The Disabled visual state is the point of these.  Setting
+                 BackgroundColor and TextColor inline on a Button overrides the
+                 platform's default disabled rendering on Android, so a disabled
+                 button still painted itself vivid blue and looked tappable —
+                 which is why the send controls appeared dead-but-live before a
+                 peer was selected.  Declaring both states explicitly is the
+                 only way to get a greyed-out look back.
+                 ================================================================ -->
+
+            <Style x:Key="PrimaryButton" TargetType="Button">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="#2563EB"/>
+                <Setter Property="TextColor" Value="White"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#2563EB"/>
+                                    <Setter Property="TextColor" Value="White"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#E5E7EB"/>
+                                    <Setter Property="TextColor" Value="#9CA3AF"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+            <Style x:Key="AccentButton" TargetType="Button">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="#7C3AED"/>
+                <Setter Property="TextColor" Value="White"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#7C3AED"/>
+                                    <Setter Property="TextColor" Value="White"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#E5E7EB"/>
+                                    <Setter Property="TextColor" Value="#9CA3AF"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+            <!-- Secondary / outline button (the "other apps" escape hatch). -->
+            <Style x:Key="SubtleButton" TargetType="Button">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="BackgroundColor" Value="#F3F4F6"/>
+                <Setter Property="TextColor" Value="#374151"/>
+                <Setter Property="BorderColor" Value="#D1D5DB"/>
+                <Setter Property="BorderWidth" Value="1"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#F3F4F6"/>
+                                    <Setter Property="TextColor" Value="#374151"/>
+                                    <Setter Property="BorderColor" Value="#D1D5DB"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#F9FAFB"/>
+                                    <Setter Property="TextColor" Value="#C4C7CC"/>
+                                    <Setter Property="BorderColor" Value="#EBEDEF"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SendEntry" TargetType="Entry">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="BackgroundColor" Value="White"/>
+                <Setter Property="TextColor" Value="#111827"/>
+                <Setter Property="PlaceholderColor" Value="#9CA3AF"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="White"/>
+                                    <Setter Property="TextColor" Value="#111827"/>
+                                    <Setter Property="PlaceholderColor" Value="#9CA3AF"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#F3F4F6"/>
+                                    <Setter Property="TextColor" Value="#9CA3AF"/>
+                                    <Setter Property="PlaceholderColor" Value="#C4C7CC"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

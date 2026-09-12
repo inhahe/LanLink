@@ -9,9 +9,18 @@
 
     <ApplicationTitle>LanLink</ApplicationTitle>
     <ApplicationId>com.lanlink.mobile</ApplicationId>
-    <ApplicationDisplayVersion>1.0.4.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1000400</ApplicationVersion>
+    <ApplicationDisplayVersion>1.2.2.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1020200</ApplicationVersion>
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
+
+    <!-- Without this, $(AndroidManifest) evaluates to empty and the .NET Android
+         build synthesises the manifest purely from [assembly: UsesPermission]
+         attributes; Platforms\Android\AndroidManifest.xml is never read at all.
+         That silently dropped both storage permissions, usesCleartextTraffic and
+         the icon attributes, while the file sat there looking authoritative.
+         Permissions declared as assembly attributes are merged into this file,
+         so both sources still work; the file is the primary one. -->
+    <AndroidManifest>Platforms\Android\AndroidManifest.xml</AndroidManifest>
   </PropertyGroup>
 
   <ItemGroup>

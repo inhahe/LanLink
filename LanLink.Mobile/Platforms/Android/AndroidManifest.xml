@@ -8,6 +8,21 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
+    <!-- All files access: the in-app file browser enumerates shared storage
+         directly, which scoped storage otherwise forbids. Google Play
+         restricts this permission; LanLink ships as a sideloaded APK. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+    <!-- Foreground service: keeps the process reachable while backgrounded.
+         Android 14 requires the granular FOREGROUND_SERVICE_DATA_SYNC to match
+         the android:foregroundServiceType on the service. POST_NOTIFICATIONS is
+         only needed for its status notification to be visible on 13+; the
+         service runs without it. WAKE_LOCK is required to acquire a WifiLock. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/appicon"
