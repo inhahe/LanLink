@@ -3,17 +3,46 @@
 Cross-platform file and text sharing between machines on a LAN, and between LANs
 over the internet. Two apps, one wire protocol:
 
-| Project | Path | UI |
+| Project | Path | Framework |
 |---|---|---|
+| **Core** | `LanLink.Core/` | `net8.0` class library — all protocol, networking and transfer logic |
 | Desktop | `LanLink/` | WPF, `net8.0-windows` (WinForms interop for the tray icon) |
 | Mobile | `../LanLink.Mobile/LanLink.Mobile/` | .NET MAUI, `net9.0-android` |
 
-The two projects are near file-for-file mirrors: `Protocol.cs`, `Discovery.cs`,
-`NetworkManager.cs`, `PeerConnection.cs`, `TransferManager.cs`, `MessageStore.cs`,
-`Peer.cs`, `AppSettings.cs` and `LinkBehavior.cs` exist in both, with only the UI
-layer and platform glue differing. **There is no shared project** — the files are
-duplicated, so a change to protocol or networking behaviour has to be made in
-both copies or the platforms stop interoperating.
+`Protocol.cs`, `Discovery.cs`, `NetworkManager.cs`, `PeerConnection.cs`,
+`TransferManager.cs`, `MessageStore.cs` and `Peer.cs` live **only** in
+`LanLink.Core`, which both apps reference. They were previously duplicated in
+each app, and drifted: mobile's `HandleHello` kept "first connection wins" long
+after desktop switched to replacing stale entries, so simultaneous dials left the
+two ends holding different sockets. Divergence is now structurally impossible
+rather than merely discouraged.
+
+Core keeps the namespace `LanLink`, so no app file needed a `using` change. Two
+things are genuinely per-platform and sit behind interfaces:
+
+- **`ILanLinkSettings`** — settings *persistence* stays in each app (desktop
+  serialises JSON to `%LOCALAPPDATA%`; mobile uses MAUI `Preferences`). These were
+  the most divergent of all the shared files because they are not the same thing.
+  Each app's `AppSettings` implements the interface and keeps its extra
+  platform-only properties.
+- **`IPlatformSupport`** — the Android `MulticastLock`. An `#if ANDROID` block
+  cannot live in a library that must also build for `net8.0-windows`.
+
+`NetworkManager`'s `exclusivePort` parameter carries the one remaining
+intentional behavioural split: desktop claims the port exclusively (it is
+single-instance, and `PortInUseException` drives "activate the running copy"),
+while mobile uses `SO_REUSEADDR` so a restart during `TIME_WAIT` still binds.
+
+**XAML must qualify Core types across the assembly boundary**:
+`xmlns:core="clr-namespace:LanLink;assembly=LanLink.Core"`. A bare
+`clr-namespace:LanLink` resolves only within the current assembly and fails with
+`XamlC error XC0000`. `LinkBehavior` and `BrowserEntry` are app-side and stay on
+`local:`.
+
+`LanLink.Core` lives at `LanLink/LanLink.Core/`. Because `copy-to-github.bat`
+flattens the desktop and mobile projects into siblings while on disk they sit
+under different parents, **the mobile csproj lists two `ProjectReference` paths
+guarded by `Exists()`** — one literal path cannot be correct in both layouts.
 
 ## Features
 
@@ -69,6 +98,19 @@ both copies or the platforms stop interoperating.
 - `TransferManager.cs` — chunks files at 256 KB, streams them, reports progress
   ~2×/second; reassembles incoming files, resolving name collisions as
   `file (2).ext`. Handles the `text` / `file_*` / `dir_*` messages.
+- **Abandoned transfers must be released.** Each in-progress incoming file is
+  an open `FileStream` in `IncomingTransfer.OpenFiles`, closed on
+  `file_end`/`dir_end`. If the sender vanishes those never arrive, so
+  `TransferManager` subscribes to `NetworkManager.PeerDisconnected` and closes
+  them. Without it the handle stayed open for the life of the process — and
+  because one open handle anywhere under a directory blocks renaming it, the
+  whole download folder became impossible to move or delete, reported only as
+  "Access is denied" with nothing to indicate LanLink was the cause.
+  Part-written files are **deleted**: a truncated JPEG that looks like a
+  complete photo is worse than no file. Files already finished in the same
+  transfer are valid and kept.
+  (`PeerDisconnected` exists because `PeerRemoved` fires only for relayed peers;
+  a direct peer is kept in the list and merely marked offline.)
 - `MessageStore.cs` — persists chat history, known peers and pending (unsent)
   messages to `%LOCALAPPDATA%\LanLink\store.json`.
 - `AppSettings.cs` — `%LOCALAPPDATA%\LanLink\settings.json`. Display name,
@@ -214,6 +256,21 @@ nothing". Bounding the height also restores
 `ItemsUpdatingScrollMode="KeepLastItemInView"`, which silently does nothing while
 the list is unbounded. The peer list escapes the bug only because it carries an
 explicit `HeightRequest`.
+
+### Android's trash is real files on disk
+
+Deleting a photo on Android renames it `.trashed-<purge-timestamp>-<original>`
+and keeps it for ~30 days. LanLink walks the **filesystem**, not the media
+database, so those are ordinary files to it: a DCIM send shipped 272 files and
+~1.3 GB of photos the user believed were deleted. Less a bandwidth problem than
+a privacy one, which is why `HideTrashedFiles` defaults to **on**.
+
+It applies in two places — `FileBrowserPage` omits them from listings, and
+directory sends skip them. The mechanism is a `Func<string,bool>` predicate
+passed to `TransferManager.SendDirectoryAsync`, **not** a property on
+`ILanLinkSettings`: an Android-specific concept has no business in the shared
+contract, desktop passes nothing, and any future exclusion (`.thumbnails`,
+`.nomedia`) is a one-line predicate rather than an interface change.
 
 ### Browsing files to send
 

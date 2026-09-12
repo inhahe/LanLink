@@ -3,7 +3,7 @@ namespace LanLink;
 /// <summary>
 /// Settings backed by MAUI Preferences (key-value store persisted across launches).
 /// </summary>
-public sealed class AppSettings
+public sealed class AppSettings : ILanLinkSettings
 {
     public string NodeId         { get; set; }
     public string DisplayName    { get; set; }
@@ -18,12 +18,33 @@ public sealed class AppSettings
     /// </summary>
     public bool AcceptExternalConnections { get; set; }
 
+    /// <summary>
+    /// Hide Android's recycle bin from the file browser and from directory
+    /// sends.  When you delete a photo, Android renames it
+    /// <c>.trashed-&lt;purge-timestamp&gt;-&lt;original&gt;</c> and keeps it for ~30 days.
+    /// LanLink walks the real filesystem, so without this a folder send happily
+    /// ships hundreds of megabytes of photos the user believes they deleted.
+    /// On by default.
+    /// </summary>
+    public bool HideTrashedFiles { get; set; }
+
+    /// <summary>
+    /// Name filter for directory sends, or null when the user wants everything.
+    /// </summary>
+    public Func<string, bool>? TrashFilter
+        => HideTrashedFiles ? IsAndroidTrash : null;
+
+    /// <summary>Android's trash naming: <c>.trashed-1791704103-IMG_0001.jpg</c>.</summary>
+    public static bool IsAndroidTrash(string name)
+        => name.StartsWith(".trashed-", StringComparison.Ordinal);
+
     public AppSettings()
     {
         NodeId      = Preferences.Get("NodeId", Guid.NewGuid().ToString("N")[..12]);
         DisplayName = Preferences.Get("DisplayName", DeviceInfo.Name ?? "Android");
         Port        = Preferences.Get("Port", 37656);
         AcceptExternalConnections = Preferences.Get("AcceptExternalConnections", false);
+        HideTrashedFiles          = Preferences.Get("HideTrashedFiles", true);
 
         // Default download location: app-specific external storage (visible in file managers).
 #if ANDROID
@@ -49,6 +70,7 @@ public sealed class AppSettings
         Preferences.Set("DownloadFolder", DownloadFolder);
         Preferences.Set("Port", Port);
         Preferences.Set("AcceptExternalConnections", AcceptExternalConnections);
+        Preferences.Set("HideTrashedFiles", HideTrashedFiles);
     }
 
     public static AppSettings Load() => new();

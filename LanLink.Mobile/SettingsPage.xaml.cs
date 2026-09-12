@@ -15,6 +15,7 @@ public partial class SettingsPage : ContentPage
         PortEntry.Text   = _settings.Port.ToString();
         NodeIdLabel.Text = _settings.NodeId;
         ExternalSwitch.IsToggled = _settings.AcceptExternalConnections;
+        TrashSwitch.IsToggled    = _settings.HideTrashedFiles;
     }
 
     private async void Save_Clicked(object? sender, EventArgs e)
@@ -28,6 +29,7 @@ public partial class SettingsPage : ContentPage
             _settings.Port = port;
 
         _settings.AcceptExternalConnections = ExternalSwitch.IsToggled;
+        _settings.HideTrashedFiles          = TrashSwitch.IsToggled;
 
         _settings.Save();
         await Shell.Current.GoToAsync("..");

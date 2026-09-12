@@ -47,6 +47,17 @@
                             VerticalOptions="Center"/>
                 </Grid>
 
+                <!-- Hide Android's recycle bin -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                        <Label Text="Hide deleted files" FontSize="14"/>
+                        <Label Text="Leaves Android's trash (.trashed-*) out of the file browser and folder sends"
+                               FontSize="11" TextColor="#9CA3AF"/>
+                    </VerticalStackLayout>
+                    <Switch x:Name="TrashSwitch" Grid.Column="1"
+                            VerticalOptions="Center"/>
+                </Grid>
+
                 <!-- Node ID (read-only) -->
                 <VerticalStackLayout Spacing="4">
                     <Label Text="Node ID" FontSize="12" TextColor="#6B7280"/>

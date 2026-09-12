@@ -14,7 +14,7 @@ public enum StartupMode
     Tray        // start hidden — only the system-tray icon is shown
 }
 
-public sealed class AppSettings
+public sealed class AppSettings : ILanLinkSettings
 {
     public string       NodeId         { get; set; } = Guid.NewGuid().ToString("N")[..12];
     public string       DisplayName    { get; set; } = Environment.MachineName;

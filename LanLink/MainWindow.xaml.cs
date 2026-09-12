@@ -48,7 +48,9 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _settings = AppSettings.Load();
-        _store    = MessageStore.Load();
+        _store    = MessageStore.Load(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "LanLink", "store.json"));
         _network  = new NetworkManager(_settings);
         _transfer = new TransferManager(_network, _settings);
 
@@ -77,30 +79,62 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(_settings.DownloadFolder);
         EnsureFirewallRules();
 
-        try
+        _ = StartNetworkWithRetryAsync();
+    }
+
+    /// <summary>
+    /// Bind the port, retrying briefly before giving up.
+    ///
+    /// Reaching here proves we hold the single-instance mutex — `App.OnStartup`
+    /// calls `Shutdown()` and never builds this window otherwise — so a
+    /// <see cref="PortInUseException"/> here *cannot* mean "another LanLink is
+    /// running". It means the port is still held by sockets the previous copy
+    /// hasn't finished releasing, which is exactly what an upgrade produces: the
+    /// installer stops the old version and immediately launches the new one via
+    /// "run when complete", and the desktop listener uses `ExclusiveAddressUse`,
+    /// so a single lingering socket blocks the bind.
+    ///
+    /// The previous handler responded by signalling the (non-existent) other
+    /// instance and exiting, so after every upgrade the app silently vanished:
+    /// no window, no tray icon, no message, and peers showing it greyed out
+    /// forever because nothing was listening.
+    /// </summary>
+    private async Task StartNetworkWithRetryAsync()
+    {
+        const int attempts = 10;
+
+        for (int attempt = 1; attempt <= attempts; attempt++)
         {
-            _network.Start();
-            AddLog($"LanLink started as \"{_settings.DisplayName}\"  " +
-                   $"(port {_settings.Port})");
-            AddLog($"Downloads go to  {_settings.DownloadFolder}");
-        }
-        catch (PortInUseException)
-        {
-            // Another LanLink already owns the port.  The single-instance mutex
-            // normally catches this earlier, but a leftover copy from before the
-            // guard existed (or one running under a different mutex) can slip
-            // through.  Rather than sit here unable to send or receive, bring
-            // the running copy to the foreground and exit.
-            if (Application.Current is App app)
-                app.SignalOtherInstanceToShow();
-            RequestExit();
-            return;
-        }
-        catch (Exception ex)
-        {
-            AddLog($"Failed to start: {ex.Message}", LogLevel.Error);
-            AddLog("The port may already be in use. Try a different port in Settings.",
-                   LogLevel.Error);
+            try
+            {
+                _network.Start();
+                AddLog($"LanLink started as \"{_settings.DisplayName}\"  " +
+                       $"(port {_settings.Port})");
+                AddLog($"Downloads go to  {_settings.DownloadFolder}");
+                return;
+            }
+            catch (PortInUseException) when (attempt < attempts)
+            {
+                if (attempt == 1)
+                    AddLog($"Port {_settings.Port} is still busy — most likely the " +
+                           "previous version is still shutting down. Retrying…");
+                await Task.Delay(1_000);
+            }
+            catch (PortInUseException)
+            {
+                AddLog($"Port {_settings.Port} is still in use after {attempts} seconds.",
+                       LogLevel.Error);
+                AddLog("Close any other copy of LanLink, or choose a different port " +
+                       "in Settings.", LogLevel.Error);
+                return;
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Failed to start: {ex.Message}", LogLevel.Error);
+                AddLog("The port may already be in use. Try a different port in Settings.",
+                       LogLevel.Error);
+                return;
+            }
         }
     }
 

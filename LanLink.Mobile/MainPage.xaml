@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:local="clr-namespace:LanLink"
+             xmlns:core="clr-namespace:LanLink;assembly=LanLink.Core"
              x:Class="LanLink.MainPage"
              Title="LanLink"
              Shell.NavBarIsVisible="True">
@@ -37,7 +38,7 @@
                                 SelectionChanged="PeerList_SelectionChanged"
                                 HeightRequest="120">
                     <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="local:Peer">
+                        <DataTemplate x:DataType="core:Peer">
                             <!--
                                 The selection highlight lives on the SwipeView
                                 because that is the DataTemplate's root element,
@@ -133,7 +134,7 @@
                 <CollectionView Grid.Row="1" x:Name="ActivityLogView"
                                 ItemsUpdatingScrollMode="KeepLastItemInView">
                     <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="local:LogEntry">
+                        <DataTemplate x:DataType="core:LogEntry">
                             <Label local:LinkBehavior.FormattedText="{Binding Display}"
                                    local:LinkBehavior.TextColor="{Binding Level, Converter={StaticResource LevelToColorConverter}}"
                                    FontSize="12"

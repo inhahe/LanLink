@@ -70,6 +70,24 @@
                   Return="ignore"
                   Impersonate="yes" />
 
+    <!-- "Launch LanLink now" on the final wizard page.  Without this the
+         installer had no way to start the app at all: the only checkbox in
+         setup is the autostart-on-boot one, which writes a registry request
+         and takes effect at the *next sign-in*, so after installing, nothing
+         was listening and peers showed the machine greyed out until it was
+         launched by hand.
+
+         Impersonate="yes" so it runs as the installing user rather than the
+         elevated MSI account (LanLink's autostart and settings are per-user).
+         Return="asyncNoWait" so setup closes immediately instead of waiting
+         for the app to exit. -->
+    <CustomAction Id="LaunchLanLink"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]LanLink.exe&quot;"
+                  Execute="immediate"
+                  Return="asyncNoWait"
+                  Impersonate="yes" />
+
     <InstallExecuteSequence>
       <Custom Action="StopRunningLanLink" Before="InstallValidate"
               Condition="WIX_UPGRADE_DETECTED" />
@@ -78,6 +96,11 @@
     <!-- UI: welcome -> license -> install dir -> autostart choice -> ready. -->
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!-- Turns the stock ExitDialog's optional checkbox into "Launch LanLink
+         now", ticked by default. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch LanLink now" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
 
     <UI>
       <!-- Insert the custom "Autostart" dialog between the install-dir dialog
@@ -91,6 +114,9 @@
                Order="10" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AutostartDlg"
                Order="10" Condition="NOT Installed" />
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchLanLink"
+               Order="10" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1" />
     </UI>
   </Package>
 

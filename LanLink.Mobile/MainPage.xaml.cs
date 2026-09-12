@@ -21,8 +21,14 @@ public partial class MainPage : ContentPage
         InitializeComponent();
 
         _settings = AppSettings.Load();
-        _store    = MessageStore.Load();
-        _network  = new NetworkManager(_settings);
+        _store    = MessageStore.Load(
+                        Path.Combine(FileSystem.AppDataDirectory, "store.json"));
+        // exclusivePort:false — Android runs one instance anyway, and
+        // SO_REUSEADDR avoids a bind failure when the app restarts while the old
+        // socket is still in TIME_WAIT.
+        _network  = new NetworkManager(_settings,
+                                       new AndroidPlatformSupport(),
+                                       exclusivePort: false);
         _transfer = new TransferManager(_network, _settings);
 
         PeerListView.ItemsSource    = _peers;
@@ -665,7 +671,8 @@ public partial class MainPage : ContentPage
             try
             {
                 if (isDir)
-                    await _transfer.SendDirectoryAsync(peer.NodeId, path);
+                    await _transfer.SendDirectoryAsync(peer.NodeId, path,
+                                                      _settings.TrashFilter);
                 else
                     await _transfer.SendFileAsync(peer.NodeId, path);
             }

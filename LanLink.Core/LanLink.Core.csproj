@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- net8.0 rather than netstandard2.0: the shared code uses range operators,
+         Dictionary.Remove(key, out value), Path.GetRelativePath,
+         AcceptTcpClientAsync(CancellationToken) and the TcpKeepAlive* socket
+         options, none of which exist in netstandard2.0.  net8.0 is referencable
+         from both net8.0-windows (desktop) and net9.0-android (mobile). -->
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- Namespace stays LanLink so neither app needs a single using-statement
+         changed when its local copies are deleted. -->
+    <RootNamespace>LanLink</RootNamespace>
+    <AssemblyName>LanLink.Core</AssemblyName>
+
+    <Nullable>enable</Nullable>
+    <!-- On: the desktop copies carry explicit usings and the mobile copies do
+         not.  Enabling implicit usings lets both styles compile unchanged. -->
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

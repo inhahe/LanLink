@@ -9,8 +9,8 @@
 
     <ApplicationTitle>LanLink</ApplicationTitle>
     <ApplicationId>com.lanlink.mobile</ApplicationId>
-    <ApplicationDisplayVersion>1.2.2.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1020200</ApplicationVersion>
+    <ApplicationDisplayVersion>2.0.2.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2000200</ApplicationVersion>
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
 
     <!-- Without this, $(AndroidManifest) evaluates to empty and the .NET Android
@@ -22,6 +22,18 @@
          so both sources still work; the file is the primary one. -->
     <AndroidManifest>Platforms\Android\AndroidManifest.xml</AndroidManifest>
   </PropertyGroup>
+
+  <!-- LanLink.Core sits at a different relative depth in the working tree than
+       in the published repo: on this machine the desktop and mobile projects
+       live under separate parents (...\LanLink\ and ...\LanLink.Mobile\),
+       while copy-to-github.bat flattens them into siblings.  One literal path
+       cannot be right in both, so both are listed and guarded by Exists(). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\LanLink\LanLink.Core\LanLink.Core.csproj"
+                      Condition="Exists('..\..\LanLink\LanLink.Core\LanLink.Core.csproj')" />
+    <ProjectReference Include="..\LanLink.Core\LanLink.Core.csproj"
+                      Condition="Exists('..\LanLink.Core\LanLink.Core.csproj')" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.111" />

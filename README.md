@@ -131,6 +131,13 @@ can sleep the app regardless.
 
 ## Sending files from Android
 
+> **Hide deleted files** (Settings, on by default) keeps Android's trash out of
+> the browser and out of folder sends. Deleting a photo on Android doesn't remove
+> it — it's renamed `.trashed-…` and kept for about 30 days — and since LanLink
+> reads the filesystem directly, sending DCIM would otherwise include every photo
+> you'd deleted in the last month. Turn it off if you want a true raw copy.
+
+
 Tap a peer in the list first — the row highlights and the send panel switches
 from *"Select a peer above to send to"* to *"Sending to &lt;name&gt;"*. Until then the
 message box and the send buttons are greyed out, and tapping them explains why.

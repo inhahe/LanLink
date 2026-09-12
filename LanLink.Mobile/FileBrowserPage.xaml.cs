@@ -100,6 +100,13 @@ public partial class FileBrowserPage : ContentPage
     /// <summary>null means the storage-roots screen rather than a directory.</summary>
     private string? _currentDir;
 
+    /// <summary>
+    /// Honours the "Hide deleted files" setting.  Android keeps deleted photos
+    /// as .trashed-&lt;timestamp&gt;-&lt;name&gt; for ~30 days, and LanLink browses the
+    /// real filesystem, so without this they show up as ordinary files.
+    /// </summary>
+    private readonly bool _hideTrashed = AppSettings.Load().HideTrashedFiles;
+
     private FileBrowserPage(BrowserMode mode)
     {
         InitializeComponent();
@@ -151,10 +158,12 @@ public partial class FileBrowserPage : ContentPage
                 var di = new DirectoryInfo(dir);
 
                 foreach (var d in di.EnumerateDirectories()
+                                    .Where(x => !Hidden(x.Name))
                                     .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                     _entries.Add(BrowserEntry.ForDirectory(d));
 
                 foreach (var f in di.EnumerateFiles()
+                                    .Where(x => !Hidden(x.Name))
                                     .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     var entry = BrowserEntry.ForFile(f);
@@ -172,6 +181,8 @@ public partial class FileBrowserPage : ContentPage
 
         UpdateFooter();
     }
+
+    private bool Hidden(string name) => _hideTrashed && AppSettings.IsAndroidTrash(name);
 
     /// <summary>
     /// Storage volumes plus shortcuts to the folders people actually want.
